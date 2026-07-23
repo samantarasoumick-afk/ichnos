@@ -1,0 +1,67 @@
+# Self-hosted full stack: Postgres + FastAPI backend + Next.js frontend.
+#
+# First time setup:
+#   1. cp .env.example .env
+#   2. Fill in SECRET_KEY / ENCRYPTION_KEY / POSTGRES_PASSWORD (see
+#      comments in .env.example for how to generate real values).
+#   3. docker compose up -d --build
+#   4. Open http://localhost:3000
+#
+# Only the frontend (port 3000) needs to be reachable by anyone but
+# you - the backend and database stay on the internal Docker network
+# and are not exposed to your LAN or the internet by this file.
+
+services:
+
+  postgres:
+    image: postgres:15
+    container_name: ichnos_postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-ichnos}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in .env}
+      POSTGRES_DB: ${POSTGRES_DB:-ichnos}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-ichnos}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    # Bound to localhost only - handy for connecting a DB client from
+    # the host machine itself, not reachable from your LAN or a tunnel.
+    ports:
+      - "127.0.0.1:5432:5432"
+
+  backend:
+    build: ./backend
+    container_name: ichnos_backend
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: postgresql://${POSTGRES_USER:-ichnos}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-ichnos}
+      SECRET_KEY: ${SECRET_KEY:?set SECRET_KEY in .env}
+      ENCRYPTION_KEY: ${ENCRYPTION_KEY:?set ENCRYPTION_KEY in .env}
+      CORS_ALLOWED_ORIGINS: ${CORS_ALLOWED_ORIGINS:-http://localhost:3000}
+      AUTO_CREATE_SCHEMA: "false"
+      DEMO_SEED: ${DEMO_SEED:-false}
+    ports:
+      - "127.0.0.1:8000:8000"
+
+  frontend:
+    build: ./frontend
+    container_name: ichnos_frontend
+    restart: unless-stopped
+    depends_on:
+      - backend
+    environment:
+      # Container-to-container hostname, not localhost - see the
+      # comment in frontend/next.config.ts for why.
+      BACKEND_INTERNAL_URL: http://backend:8000
+    ports:
+      - "3000:3000"
+
+volumes:
+  postgres_data:
