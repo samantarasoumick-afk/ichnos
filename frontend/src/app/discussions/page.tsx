@@ -40,13 +40,20 @@ export default function DiscussionsPage() {
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
   const [statusFilter, setStatusFilter] = useState<StatusFilter>("OPEN");
-  const [typeFilter, setTypeFilter] = useState<TypeFilter>("ALL");
   // Read once, lazily, rather than via useSearchParams() (which in
   // the Next.js app router requires a Suspense boundary even for a
   // fully client-rendered page like this one) or an effect (which
   // would call setState synchronously on mount). window is undefined
   // during any server-side render pass, hence the guard - matches the
-  // pattern AuthContext already uses for localStorage.
+  // pattern AuthContext already uses for localStorage. Lets TopNav
+  // (and anywhere else) deep-link straight to a filtered view, e.g.
+  // /discussions?thread_type=issue.
+  const [typeFilter, setTypeFilter] = useState<TypeFilter>(() => {
+    if (typeof window === "undefined") return "ALL";
+    const raw = new URLSearchParams(window.location.search).get("thread_type");
+    const upper = raw?.toUpperCase();
+    return upper === "QUESTION" || upper === "PROPOSAL" || upper === "ISSUE" ? upper : "ALL";
+  });
   const [datasetIdFilter, setDatasetIdFilter] = useState<string | null>(() => {
     if (typeof window === "undefined") return null;
     return new URLSearchParams(window.location.search).get("dataset_id");
