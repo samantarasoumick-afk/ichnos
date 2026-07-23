@@ -27,13 +27,6 @@ export default function TopNav() {
           Discussions
         </Link>
 
-        <Link
-          href="/discussions?thread_type=issue"
-          className="text-sm text-gray-600 hover:text-black"
-        >
-          Issues
-        </Link>
-
         <Link href="/governance" className="text-sm text-gray-600 hover:text-black">
           Governance
         </Link>
