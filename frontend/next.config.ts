@@ -9,6 +9,14 @@ import type { NextConfig } from "next";
 const BACKEND_INTERNAL_URL = process.env.BACKEND_INTERNAL_URL ?? "http://127.0.0.1:8000";
 
 const nextConfig: NextConfig = {
+  // Next's dev server blocks cross-origin requests by default (any host
+  // other than localhost gets a 401, including the HMR websocket) -
+  // that's what breaks the app when it's reached through a tunnel like
+  // Cloudflare Quick Tunnel instead of localhost directly. The wildcard
+  // covers every random *.trycloudflare.com hostname Quick Tunnel hands
+  // out, so this doesn't need updating each time the tunnel restarts.
+  // Dev-only setting - has no effect on `next build`/`next start`.
+  allowedDevOrigins: ["*.trycloudflare.com"],
   async rewrites() {
     return [
       {

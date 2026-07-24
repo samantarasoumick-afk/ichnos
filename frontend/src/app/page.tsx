@@ -8,7 +8,7 @@ import DemoDataPanel from "../components/DemoDataPanel";
 import ScanButton from "../components/ScanButton";
 import TopNav from "../components/TopNav";
 
-import { useRequireAuth } from "../hooks/useRequireAuth";
+import { useAuth } from "../contexts/AuthContext";
 
 import api from "../services/api";
 
@@ -38,7 +38,7 @@ function StatChip({ label, value }: { label: string; value: string | number }) {
 
 export default function Home() {
 
-  const { user, loading: authLoading } = useRequireAuth();
+  const { user, loading: authLoading } = useAuth();
 
   const [sources, setSources] = useState<Source[]>([]);
 
@@ -57,6 +57,16 @@ export default function Home() {
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
   const canManageSources = user?.role !== "viewer";
+
+  // Not logged in: send the visitor to the full marketing site
+  // (frontend/public/site.html) instead of forcing straight to /login -
+  // it lives as a static asset on this same origin, so one tunnel/host
+  // covers pitch + product without a separate app. subdomain.
+  useEffect(() => {
+    if (!authLoading && !user) {
+      window.location.replace("/site.html");
+    }
+  }, [authLoading, user]);
 
   useEffect(() => {
 
@@ -254,7 +264,18 @@ export default function Home() {
     count: datasets.filter((dataset) => dataset.data_category === category).length,
   }));
 
-  if (authLoading || !user) {
+  if (authLoading) {
+    return (
+      <main className="min-h-screen p-10 bg-gray-100">
+        <div className="rounded-lg bg-white p-6 shadow">Loading...</div>
+      </main>
+    );
+  }
+
+  // Not logged in: the useEffect above is already navigating to
+  // /site.html - render the same loading state in the brief window
+  // before that completes, rather than flashing dashboard chrome.
+  if (!user) {
     return (
       <main className="min-h-screen p-10 bg-gray-100">
         <div className="rounded-lg bg-white p-6 shadow">Loading...</div>
