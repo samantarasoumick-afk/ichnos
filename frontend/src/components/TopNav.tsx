@@ -103,6 +103,10 @@ export default function TopNav() {
           Lineage
         </Link>
 
+        <Link href="/data-quality" className={linkClasses("/data-quality")}>
+          Data Quality
+        </Link>
+
         <Link href="/ask" className={linkClasses("/ask")}>
           Ask
         </Link>

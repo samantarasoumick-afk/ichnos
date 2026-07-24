@@ -38,6 +38,8 @@ def ask(
             detail="Ask a question first."
         )
 
-    result = answer_question(db, current_user.organization_id, payload.query)
+    history = [{"role": turn.role, "text": turn.text} for turn in payload.history]
+
+    result = answer_question(db, current_user.organization_id, payload.query, history=history)
 
     return result

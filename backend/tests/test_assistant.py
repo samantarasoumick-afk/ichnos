@@ -5,6 +5,7 @@ health) each answered directly from real data, the semantic-search
 fallback for anything else, tenant scoping, and the API endpoint.
 """
 
+import os
 import unittest
 import uuid
 from unittest.mock import patch, MagicMock
@@ -242,6 +243,93 @@ class AssistantTests(unittest.TestCase):
 
         body = self._ask(headers_b, "which datasets have PII?")
         self.assertIn("nothing in your catalog", body["answer"])
+
+    # -- LLM path (ANTHROPIC_API_KEY configured) --------------------------
+    #
+    # None of the tests above set ANTHROPIC_API_KEY, so they all keep
+    # exercising the deterministic paths exactly as before - confirming
+    # the LLM path is genuinely additive, not a replacement. These tests
+    # mock the HTTP boundary (_call_anthropic_api) rather than making a
+    # real network call, following the same style used for send_email in
+    # test_magic_link_login.py.
+
+    @patch("app.services.assistant_service._call_anthropic_api")
+    def test_llm_path_not_invoked_without_api_key(self, mock_call):
+        headers = self._register_and_login(f"allm0{self._n}@a.com", f"LLM Org 0 {self._n}")
+        source_id = self._create_source(headers, f"SLLM0{self._n}")
+        self._scan(headers, source_id, SCAN_RESULT)
+
+        body = self._ask(headers, "which datasets have PII?")
+
+        mock_call.assert_not_called()
+        self.assertIn("customers", body["answer"])
+
+    @patch("app.services.assistant_service._call_anthropic_api")
+    def test_llm_path_used_when_api_key_configured(self, mock_call):
+        mock_call.return_value = "The customers dataset holds contact details for each customer."
+
+        headers = self._register_and_login(f"allm1{self._n}@a.com", f"LLM Org 1 {self._n}")
+        source_id = self._create_source(headers, f"SLLM1{self._n}")
+        self._scan(headers, source_id, SCAN_RESULT)
+
+        with patch.dict(os.environ, {"ANTHROPIC_API_KEY": "test-key"}):
+            body = self._ask(headers, "tell me about the customers dataset")
+
+        self.assertTrue(mock_call.called)
+        self.assertEqual(
+            body["answer"],
+            "The customers dataset holds contact details for each customer.",
+        )
+
+    @patch("app.services.assistant_service._call_anthropic_api")
+    def test_llm_path_falls_back_to_deterministic_on_api_failure(self, mock_call):
+        # None simulates any failure inside _call_anthropic_api (network
+        # error, timeout, non-200, unexpected response shape) - it always
+        # collapses to None rather than raising.
+        mock_call.return_value = None
+
+        headers = self._register_and_login(f"allm2{self._n}@a.com", f"LLM Org 2 {self._n}")
+        source_id = self._create_source(headers, f"SLLM2{self._n}")
+        self._scan(headers, source_id, SCAN_RESULT)
+
+        with patch.dict(os.environ, {"ANTHROPIC_API_KEY": "test-key"}):
+            body = self._ask(headers, "which datasets have PII?")
+
+        self.assertTrue(mock_call.called)
+        # Same deterministic PII answer as the no-key path.
+        self.assertIn("customers", body["answer"])
+
+    @patch("app.services.assistant_service._call_anthropic_api")
+    def test_llm_path_forwards_conversation_history(self, mock_call):
+        mock_call.return_value = "Yes, email and phone are both PII on that dataset."
+
+        headers = self._register_and_login(f"allm3{self._n}@a.com", f"LLM Org 3 {self._n}")
+        source_id = self._create_source(headers, f"SLLM3{self._n}")
+        self._scan(headers, source_id, SCAN_RESULT)
+
+        history = [
+            {"role": "user", "text": "what does the customers dataset contain?"},
+            {"role": "assistant", "text": "It has id, email, and phone columns."},
+        ]
+
+        with patch.dict(os.environ, {"ANTHROPIC_API_KEY": "test-key"}):
+            r = self.client.post("/api/assistant/ask", headers=headers, json={
+                "query": "is any of that PII?",
+                "history": history,
+            })
+        self.assertEqual(r.status_code, 200, r.text)
+
+        self.assertTrue(mock_call.called)
+        _, messages = mock_call.call_args.args
+        self.assertEqual(
+            messages[0],
+            {"role": "user", "content": "what does the customers dataset contain?"},
+        )
+        self.assertEqual(
+            messages[1],
+            {"role": "assistant", "content": "It has id, email, and phone columns."},
+        )
+        self.assertEqual(messages[-1], {"role": "user", "content": "is any of that PII?"})
 
 
 class SemanticSearchServiceTests(unittest.TestCase):

@@ -278,6 +278,59 @@ class LineageQualityTests(unittest.TestCase):
         r = self.client.get(f"/api/data-quality/dataset/{dataset_id}/effective", headers=headers_b)
         self.assertEqual(r.status_code, 404)
 
+    # -- API: bulk catalog-wide effective quality -------------------------
+
+    def test_bulk_effective_returns_one_entry_per_dataset(self):
+        headers = self._register_and_login(f"bulk{self._n}@a.com", f"Bulk Org {self._n}")
+
+        source_id = self._scan_dataset(headers, f"source_{self._n}")
+        downstream_id = self._scan_dataset(headers, f"downstream_{self._n}")
+
+        self._set_quality_score(source_id, 50.0)
+        self._clear_quality_profile(downstream_id)
+
+        self._create_edge(
+            headers, source_id, downstream_id,
+            transformation_type="SQL_TRANSFORM",
+            transformation_description="Aggregates daily orders into a summary table.",
+            filter_logic="WHERE order_status = 'completed'",
+        )
+
+        r = self.client.get("/api/data-quality/effective", headers=headers)
+        self.assertEqual(r.status_code, 200, r.text)
+
+        results = {row["dataset_id"]: row for row in r.json()}
+        self.assertEqual(len(results), 2)
+        self.assertEqual(results[source_id]["effective_score"], 50.0)
+        self.assertEqual(results[downstream_id]["effective_score"], 55.0)
+
+    def test_bulk_effective_handles_dataset_with_no_profile(self):
+        headers = self._register_and_login(f"bulknp{self._n}@a.com", f"Bulk NoProfile Org {self._n}")
+
+        dataset_id = self._scan_dataset(headers, f"unprofiled_{self._n}")
+        self._clear_quality_profile(dataset_id)
+
+        r = self.client.get("/api/data-quality/effective", headers=headers)
+        self.assertEqual(r.status_code, 200, r.text)
+
+        results = {row["dataset_id"]: row for row in r.json()}
+        self.assertEqual(results[dataset_id]["own_score"], None)
+        self.assertEqual(results[dataset_id]["effective_score"], None)
+
+    def test_bulk_effective_is_tenant_scoped(self):
+        headers_a = self._register_and_login(f"bulkA{self._n}@a.com", f"Bulk Tenant A {self._n}")
+        headers_b = self._register_and_login(f"bulkB{self._n}@a.com", f"Bulk Tenant B {self._n}")
+
+        dataset_a = self._scan_dataset(headers_a, f"scoped_a_{self._n}")
+        self._scan_dataset(headers_b, f"scoped_b_{self._n}")
+
+        r = self.client.get("/api/data-quality/effective", headers=headers_a)
+        self.assertEqual(r.status_code, 200, r.text)
+
+        dataset_ids = {row["dataset_id"] for row in r.json()}
+        self.assertIn(dataset_a, dataset_ids)
+        self.assertEqual(len(dataset_ids), 1)
+
 
 if __name__ == "__main__":
     unittest.main()

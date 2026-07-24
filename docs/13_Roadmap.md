@@ -23,7 +23,10 @@ transformations; full-graph and dataset-scoped lineage views.
 
 **Data quality** - real profiling from scan-time statistics
 (completeness, uniqueness, validity, consistency, freshness), not
-simulated; surfaced per-dataset and blended with lineage inheritance.
+simulated; surfaced per-dataset and blended with lineage inheritance;
+a catalog-wide Data Quality page, sorted worst-first with domain/
+threshold filters, so problem datasets surface without opening each
+one individually.
 
 **Governance** - business glossary with dataset/column-level linking;
 business process repository, now with a plain-language "narrative"
@@ -48,8 +51,11 @@ dashboard, compliance report export.
 
 **Platform** - multi-tenant org isolation on every query; RBAC
 (admin, steward, data_owner, viewer); JWT auth with login lockout;
-credentials encrypted at rest; NL Q&A assistant over the catalog
-(semantic retrieval); team management.
+credentials encrypted at rest; NL Q&A assistant over the catalog -
+LLM-backed (Anthropic) open-ended, multi-turn answers grounded in real
+catalog/DQ/lineage data when `ANTHROPIC_API_KEY` is set, falling back
+to deterministic keyword-matched intents + TF-IDF semantic retrieval
+otherwise; team management.
 
 ## Rollout-readiness verdict
 

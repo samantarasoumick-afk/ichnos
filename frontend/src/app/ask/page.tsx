@@ -88,7 +88,13 @@ export default function AskPage() {
     setErrorMessage(null);
 
     try {
-      const response = await api.post<AskResponse>("/api/assistant/ask", { query: trimmed });
+      const response = await api.post<AskResponse>("/api/assistant/ask", {
+        query: trimmed,
+        // Prior turns only - the new question above isn't part of history,
+        // it's the current query. Lets follow-up questions ("what about
+        // its downstream tables?") resolve against what was already asked.
+        history: conversation.map((entry) => ({ role: entry.role, text: entry.text })),
+      });
 
       const assistantEntry: ConversationEntry = {
         id: `${newEntryId()}-assistant`,

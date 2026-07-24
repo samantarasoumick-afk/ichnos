@@ -76,6 +76,30 @@ def get_data_quality_for_dataset(
 
 
 @router.get(
+    "/effective",
+    response_model=list[EffectiveQualityResponse]
+)
+def list_effective_quality(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """
+    Lineage-adjusted quality score for every dataset in the org, in one
+    round trip - what the catalog-wide Data Quality page sorts and
+    filters by, instead of making a separate call per dataset.
+    """
+
+    dataset_ids = [
+        row[0] for row in
+        db.query(Dataset.id)
+        .filter(Dataset.organization_id == current_user.organization_id)
+        .all()
+    ]
+
+    return [compute_effective_quality(dataset_id, db) for dataset_id in dataset_ids]
+
+
+@router.get(
     "/dataset/{dataset_id}/effective",
     response_model=EffectiveQualityResponse
 )
