@@ -9,6 +9,8 @@ from app.db.session import get_db
 from app.models.business_process import BusinessProcess
 from app.models.business_process import BusinessProcessLink
 from app.models.dataset import Dataset
+from app.models.glossary_link import GlossaryTermLink
+from app.models.governance import BusinessGlossaryTerm
 from app.models.user import User
 
 from app.schemas.business_process import BusinessProcessCreate
@@ -44,11 +46,113 @@ def _to_response(db: Session, process: BusinessProcess) -> BusinessProcessRespon
         id=process.id,
         name=process.name,
         description=process.description,
+        narrative=process.narrative,
         owner=process.owner,
         dataset_count=_dataset_count(db, process.id),
         created_at=process.created_at,
         updated_at=process.updated_at,
     )
+
+
+def _humanize_dataset_name(dataset: Dataset) -> str:
+    """
+    Turns a raw table name like 'customer_ltv' into a business-glossary-
+    friendly 'Customer Ltv'. Imperfect on abbreviations, but good
+    enough as an editable starting point - a steward can rename the
+    generated term at any time, same as any other glossary term.
+    """
+
+    return (
+        (dataset.name or "")
+        .replace("_", " ")
+        .replace("-", " ")
+        .strip()
+        .title()
+        or dataset.name
+    )
+
+
+def _auto_link_glossary_term(
+    db: Session,
+    dataset: Dataset,
+    process: BusinessProcess,
+    current_user: User,
+) -> tuple[bool, str]:
+    """
+    The "different data types becomes part of Business Glossary" half
+    of process modeling: linking a dataset to a process ensures it has
+    a glossary term, reusing an existing term of the same name if one
+    already exists rather than creating a duplicate. New terms land as
+    DRAFT so a steward reviews the auto-generated definition before
+    it's treated as authoritative.
+    """
+
+    term_text = _humanize_dataset_name(dataset)
+
+    term = (
+        db.query(BusinessGlossaryTerm)
+        .filter(
+            BusinessGlossaryTerm.organization_id == current_user.organization_id,
+            BusinessGlossaryTerm.term == term_text,
+        )
+        .first()
+    )
+
+    created_term = False
+
+    if not term:
+
+        category_label = (dataset.data_category or "").title() or "Uncategorized"
+
+        definition = (
+            f"Auto-generated when {dataset.schema_name}.{dataset.name} was "
+            f"linked to the '{process.name}' business process. "
+            f"{category_label} data - review and refine this definition."
+        )
+
+        term = BusinessGlossaryTerm(
+            term=term_text,
+            definition=definition,
+            domain=dataset.data_category,
+            organization_id=current_user.organization_id,
+            status="DRAFT",
+        )
+
+        db.add(term)
+        db.flush()
+        created_term = True
+
+    existing_link = (
+        db.query(GlossaryTermLink)
+        .filter(
+            GlossaryTermLink.term_id == term.id,
+            GlossaryTermLink.dataset_id == dataset.id,
+            GlossaryTermLink.column_id.is_(None),
+        )
+        .first()
+    )
+
+    if not existing_link:
+
+        db.add(GlossaryTermLink(term_id=term.id, dataset_id=dataset.id, column_id=None))
+        db.flush()
+
+        log_audit_event(
+            db,
+            organization_id=current_user.organization_id,
+            action="glossary.auto_link",
+            actor_user_id=current_user.id,
+            actor_email=current_user.email,
+            resource_type="dataset",
+            resource_id=dataset.id,
+            details=(
+                f"Auto-linked glossary term '{term.term}' to "
+                f"{dataset.schema_name}.{dataset.name} via process '{process.name}'"
+                + (" (new term)" if created_term else " (existing term reused)")
+            ),
+        )
+
+    return created_term, term.term
 
 
 def _get_process_or_404(process_id: str, db: Session, current_user: User) -> BusinessProcess:
@@ -137,6 +241,7 @@ def create_business_process(
     process = BusinessProcess(
         name=payload.name,
         description=payload.description,
+        narrative=payload.narrative,
         owner=payload.owner,
         organization_id=current_user.organization_id,
     )
@@ -257,6 +362,8 @@ def link_dataset_to_process(
         details=f"Linked '{dataset.schema_name}.{dataset.name}' to process '{process.name}'",
     )
 
+    term_created, term_name = _auto_link_glossary_term(db, dataset, process, current_user)
+
     db.commit()
 
     return BusinessProcessLinkResponse(
@@ -265,6 +372,8 @@ def link_dataset_to_process(
         process_name=process.name,
         dataset_id=link.dataset_id,
         created_at=link.created_at,
+        glossary_term_created=term_created,
+        glossary_term_name=term_name,
     )
 
 

@@ -1,15 +1,20 @@
-# Self-hosted full stack: Postgres + FastAPI backend + Next.js frontend.
+# Self-hosted full stack: Postgres + FastAPI backend + Next.js frontend
+# + the ichnos marketing website (nginx), which is the public front
+# door and reverse-proxies the app itself on an "app." subdomain.
 #
 # First time setup:
 #   1. cp .env.example .env
 #   2. Fill in SECRET_KEY / ENCRYPTION_KEY / POSTGRES_PASSWORD (see
 #      comments in .env.example for how to generate real values).
 #   3. docker compose up -d --build
-#   4. Open http://localhost:3000
+#   4. Open http://localhost (marketing site) or
+#      http://app.localhost (the app - resolves locally with no
+#      /etc/hosts entry needed in most modern browsers)
 #
-# Only the frontend (port 3000) needs to be reachable by anyone but
-# you - the backend and database stay on the internal Docker network
-# and are not exposed to your LAN or the internet by this file.
+# Only the website container (port 80) needs to be reachable by
+# anyone but you - the backend and database stay on the internal
+# Docker network. The frontend's own port 3000 stays published too,
+# for direct access during development.
 
 services:
 
@@ -44,7 +49,13 @@ services:
       DATABASE_URL: postgresql://${POSTGRES_USER:-ichnos}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-ichnos}
       SECRET_KEY: ${SECRET_KEY:?set SECRET_KEY in .env}
       ENCRYPTION_KEY: ${ENCRYPTION_KEY:?set ENCRYPTION_KEY in .env}
-      CORS_ALLOWED_ORIGINS: ${CORS_ALLOWED_ORIGINS:-http://localhost:3000}
+      CORS_ALLOWED_ORIGINS: ${CORS_ALLOWED_ORIGINS:-http://app.localhost}
+      FRONTEND_URL: ${FRONTEND_URL:-http://app.localhost}
+      SMTP_HOST: ${SMTP_HOST:-}
+      SMTP_PORT: ${SMTP_PORT:-587}
+      SMTP_USERNAME: ${SMTP_USERNAME:-}
+      SMTP_PASSWORD: ${SMTP_PASSWORD:-}
+      SMTP_FROM: ${SMTP_FROM:-Ichnos <no-reply@ichnos.local>}
       AUTO_CREATE_SCHEMA: "false"
       DEMO_SEED: ${DEMO_SEED:-false}
     ports:
@@ -62,6 +73,18 @@ services:
       BACKEND_INTERNAL_URL: http://backend:8000
     ports:
       - "3000:3000"
+
+  website:
+    image: nginx:1.27-alpine
+    container_name: ichnos_website
+    restart: unless-stopped
+    depends_on:
+      - frontend
+    volumes:
+      - ./website:/usr/share/nginx/html:ro
+      - ./website/nginx.conf:/etc/nginx/conf.d/default.conf:ro
+    ports:
+      - "80:80"
 
 volumes:
   postgres_data:

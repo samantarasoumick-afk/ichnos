@@ -1,16 +1,29 @@
-# Self-hosting on a spare laptop (testing phase)
+# Self-hosting (interim plan)
 
-This is the interim hosting plan: run the full stack on a spare
-Windows laptop, reachable by you and a handful of testers from
-anywhere, without opening any ports on your home router. It's meant
-to carry you through early testing until you have real traction - see
-"When to graduate" at the end for the signals that mean it's time to
-move to AWS or a real server.
+This is the interim hosting plan, in two phases on two different
+machines:
+
+- **Phase A - now:** run the full stack on the same laptop you're
+  developing on. Nobody outside you touches it yet, so there's no
+  tunnel or public URL needed - `http://localhost` (marketing site)
+  and `http://app.localhost` (the app) are enough.
+- **Phase B - once you're ready for outside testers:** move to a
+  second, dedicated laptop (doesn't need to be powerful - see
+  hardware notes below) that stays on and reachable at all times,
+  independent of whatever you're doing on your main machine. That's
+  when the Cloudflare Tunnel setup in step 5 comes in.
+
+Both phases use the exact same `docker-compose.yml` - moving from A to
+B is "clone the repo onto the second laptop and start it there," not a
+rebuild. See "When to graduate off the laptop(s) entirely" at the end
+for the signals that mean it's time to move to AWS or a real server
+instead of a second laptop.
 
 Read `docs/13_Roadmap.md` first if you haven't - Phase 1 there
-(security review, password reset, rate limiting, etc.) should be
+(security review, passwordless login, rate limiting, etc.) should be
 substantially done before real testers put real data into this
-instance.
+instance. That's the gate for moving from Phase A to Phase B here, not
+a hard prerequisite for running this on your own machine today.
 
 ## 1. Prepare the laptop
 
@@ -69,60 +82,81 @@ docker compose up -d --build
 First build takes a few minutes (installing Python and Node
 dependencies). Once it's up:
 
-- Frontend: http://localhost:3000
+- Marketing site: http://localhost
+- App: http://app.localhost (most modern browsers resolve
+  `*.localhost` to `127.0.0.1` automatically, no `/etc/hosts` edit
+  needed - if yours doesn't, http://localhost:3000 reaches the app
+  container directly as a fallback)
 - Backend health check: http://localhost:8000/ (should return
   `{"status": "running"}`)
 
-Confirm you can register an account and log in before moving on.
+Confirm you can register an account and log in before moving on. This
+much - Phase A - is everything you need while it's just you.
 
-## 5. Let testers reach it - Cloudflare Tunnel
+## 5. Phase B: let outside testers reach it - Cloudflare Tunnel
+
+This is the point where you move to the **second laptop** - a
+dedicated, always-on machine, separate from whatever you're doing your
+own work on day to day. It doesn't need to be powerful; anything that
+can run Docker Desktop and stay on comfortably is enough. Repeat steps
+1-4 above on that machine, then continue here.
 
 Do not forward ports on your router for this. Port forwarding exposes
 your home network's public IP directly and is the wrong tool here.
 Cloudflare Tunnel opens an outbound-only connection from the laptop to
 Cloudflare, so nothing needs to be opened inbound on your router or
-Windows Firewall, and you get a real HTTPS URL for free.
+Windows Firewall, and you get real HTTPS URLs for free.
 
-**Fastest option - Quick Tunnel (no account needed):**
+**Fastest option - Quick Tunnel (no account needed, one hostname
+only):**
 
 1. Install `cloudflared`: download the Windows installer from
    [Cloudflare's docs](https://developers.cloudflare.com/cloudflare-one/connections/connect-networks/downloads/).
 2. Run:
    ```
-   cloudflared tunnel --url http://localhost:3000
+   cloudflared tunnel --url http://localhost:80
    ```
 3. It prints a random URL like `https://random-words.trycloudflare.com`
-   - share that with testers. This URL changes every time you restart
-   the tunnel, so it's best for short test sessions, not a stable link
-   you hand out repeatedly.
+   - that single URL serves the marketing site at `/`. Quick Tunnels
+   only expose one hostname, so this option can't also give you a
+   separate `app.` URL - use it for a quick look at the marketing
+   site, not for testers who need to log into the app. Use the Named
+   Tunnel option below for real testing.
 
-**Better option for repeated use - Named Tunnel (needs a free
-Cloudflare account and a domain, even a cheap one you buy just for
-this):**
+**Named Tunnel (needs a free Cloudflare account and a domain, even a
+cheap one bought just for this) - gives you both hostnames:**
 
 1. `cloudflared tunnel login` - opens a browser, log into (or create)
    your Cloudflare account and pick the domain.
 2. `cloudflared tunnel create ichnos`
-3. Create a config file (e.g. `C:\Users\<you>\.cloudflared\config.yml`):
+3. Create a config file (e.g. `C:\Users\<you>\.cloudflared\config.yml`).
+   Both hostnames point at the same local port - the `website`
+   container (nginx) reads the `Host` header and routes the marketing
+   site vs. the app accordingly:
    ```yaml
    tunnel: ichnos
    credentials-file: C:\Users\<you>\.cloudflared\<tunnel-id>.json
    ingress:
      - hostname: ichnos.yourdomain.com
-       service: http://localhost:3000
+       service: http://localhost:80
+     - hostname: app.ichnos.yourdomain.com
+       service: http://localhost:80
      - service: http_status:404
    ```
-4. `cloudflared tunnel route dns ichnos ichnos.yourdomain.com`
+4. `cloudflared tunnel route dns ichnos ichnos.yourdomain.com` and
+   `cloudflared tunnel route dns ichnos app.ichnos.yourdomain.com`.
 5. Run it as a Windows service so it survives reboots:
    `cloudflared service install`, then `net start cloudflared` (or
    just leave `cloudflared tunnel run ichnos` running in a terminal
    window for casual testing).
-6. Testers now reach the app at `https://ichnos.yourdomain.com`.
+6. Testers now see the marketing site at
+   `https://ichnos.yourdomain.com` and reach the app at
+   `https://app.ichnos.yourdomain.com`.
 
-Either way, once you know the public URL, update `.env`:
+Either way, once you know the app's public hostname, update `.env`:
 
 ```
-CORS_ALLOWED_ORIGINS=https://ichnos.yourdomain.com
+CORS_ALLOWED_ORIGINS=https://app.ichnos.yourdomain.com
 ```
 
 and restart: `docker compose up -d`.
@@ -149,7 +183,7 @@ and restart: `docker compose up -d`.
   (e.g. UptimeRobot) pinging your tunnel URL every few minutes will
   tell you if the laptop or tunnel goes down before a tester does.
 
-## When to graduate off the laptop
+## When to graduate off the laptop(s) entirely
 
 Move to AWS (or any real hosting) when any of these becomes true:
 

@@ -48,12 +48,12 @@ class BusinessProcessTests(unittest.TestCase):
         self.assertEqual(r.status_code, 200, r.text)
         return r.json()
 
-    def _create_dataset(self, headers, table_name="orders"):
+    def _create_dataset(self, headers, table_name="orders", source_suffix=""):
         csv_bytes = b"order_id,total\n1,10.00\n2,20.00\n"
         r = self.client.post(
             "/api/sources/upload",
             headers=headers,
-            data={"name": f"src-{table_name}-{self._n}", "table_name": table_name, "schema_name": "public"},
+            data={"name": f"src-{table_name}-{self._n}{source_suffix}", "table_name": table_name, "schema_name": "public"},
             files={"file": (f"{table_name}.csv", csv_bytes, "text/csv")},
         )
         self.assertEqual(r.status_code, 200, r.text)
@@ -169,6 +169,81 @@ class BusinessProcessTests(unittest.TestCase):
 
         r = self.client.get("/api/business-processes", headers=headers_b)
         self.assertEqual(r.json(), [])
+
+    def test_narrative_field_round_trips(self):
+        headers = self._register_and_login(f"bp10{self._n}@a.com", f"Process Org 10 {self._n}")
+
+        r = self.client.post("/api/business-processes", headers=headers, json={
+            "name": f"Order-to-Cash {self._n}",
+            "narrative": "A Customer (Master) orders (Transactional) from a Store (Master) in Mumbai (Reference).",
+        })
+        self.assertEqual(r.status_code, 200, r.text)
+        process = r.json()
+        self.assertIn("Customer (Master)", process["narrative"])
+
+        r = self.client.patch(f"/api/business-processes/{process['id']}", headers=headers, json={
+            "narrative": "Updated narrative.",
+        })
+        self.assertEqual(r.status_code, 200, r.text)
+        self.assertEqual(r.json()["narrative"], "Updated narrative.")
+
+    def test_linking_dataset_to_process_autocreates_glossary_term(self):
+        headers = self._register_and_login(f"bp11{self._n}@a.com", f"Process Org 11 {self._n}")
+        process = self._create_process(headers)
+        dataset_id = self._create_dataset(headers, table_name="orders")
+
+        r = self.client.post(f"/api/business-processes/{process['id']}/datasets", headers=headers, json={
+            "dataset_id": dataset_id,
+        })
+        self.assertEqual(r.status_code, 200, r.text)
+        body = r.json()
+        self.assertTrue(body["glossary_term_created"])
+        self.assertEqual(body["glossary_term_name"], "Orders")
+
+        r = self.client.get(f"/api/glossary-links/dataset/{dataset_id}", headers=headers)
+        self.assertEqual(r.status_code, 200, r.text)
+        terms = [link["term"] for link in r.json()]
+        self.assertIn("Orders", terms)
+
+        r = self.client.get("/api/governance/glossary", headers=headers)
+        self.assertEqual(r.status_code, 200, r.text)
+        orders_term = next(t for t in r.json() if t["term"] == "Orders")
+        self.assertEqual(orders_term["status"], "DRAFT")
+
+    def test_linking_second_dataset_with_same_name_reuses_glossary_term(self):
+        headers = self._register_and_login(f"bp12{self._n}@a.com", f"Process Org 12 {self._n}")
+        process = self._create_process(headers)
+        dataset_1 = self._create_dataset(headers, table_name="customer", source_suffix="-a")
+        dataset_2 = self._create_dataset(headers, table_name="customer", source_suffix="-b")
+
+        r1 = self.client.post(f"/api/business-processes/{process['id']}/datasets", headers=headers, json={
+            "dataset_id": dataset_1,
+        })
+        self.assertTrue(r1.json()["glossary_term_created"])
+
+        r2 = self.client.post(f"/api/business-processes/{process['id']}/datasets", headers=headers, json={
+            "dataset_id": dataset_2,
+        })
+        self.assertEqual(r2.status_code, 200, r2.text)
+        self.assertFalse(r2.json()["glossary_term_created"])
+        self.assertEqual(r2.json()["glossary_term_name"], "Customer")
+
+        r = self.client.get("/api/governance/glossary", headers=headers)
+        customer_terms = [t for t in r.json() if t["term"] == "Customer"]
+        self.assertEqual(len(customer_terms), 1)
+
+    def test_dataset_summary_for_process_includes_data_category(self):
+        headers = self._register_and_login(f"bp13{self._n}@a.com", f"Process Org 13 {self._n}")
+        process = self._create_process(headers)
+        dataset_id = self._create_dataset(headers, table_name="orders")
+
+        self.client.post(f"/api/business-processes/{process['id']}/datasets", headers=headers, json={
+            "dataset_id": dataset_id,
+        })
+
+        r = self.client.get(f"/api/business-processes/{process['id']}/datasets", headers=headers)
+        self.assertEqual(r.status_code, 200, r.text)
+        self.assertIn("data_category", r.json()[0])
 
     def test_role_gating(self):
         headers = self._register_and_login(f"bp9{self._n}@a.com", f"Process Org 9 {self._n}")

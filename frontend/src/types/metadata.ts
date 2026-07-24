@@ -108,6 +108,7 @@ export type BusinessProcess = {
   id: string;
   name: string;
   description?: string | null;
+  narrative?: string | null;
   owner?: string | null;
   dataset_count: number;
   created_at?: string;
@@ -118,12 +119,14 @@ export type BusinessProcess = {
 export type BusinessProcessCreate = {
   name: string;
   description?: string;
+  narrative?: string;
   owner?: string;
 };
 
 export type BusinessProcessUpdate = {
   name?: string;
   description?: string;
+  narrative?: string;
   owner?: string;
 };
 
@@ -131,6 +134,18 @@ export type BusinessProcessDatasetSummary = {
   id: string;
   name: string;
   schema_name: string;
+  data_category?: DataCategory | null;
+  system_role?: SystemRole | null;
+};
+
+export type BusinessProcessLinkResult = {
+  id: string;
+  process_id: string;
+  process_name: string;
+  dataset_id: string;
+  created_at?: string;
+  glossary_term_created: boolean;
+  glossary_term_name?: string | null;
 };
 
 export type DatasetColumn = {

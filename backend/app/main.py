@@ -5,13 +5,27 @@
 from dotenv import load_dotenv
 load_dotenv()
 
+# Structured (JSON) logging, configured before anything else logs.
+from app.logging_config import configure_logging
+configure_logging()
+
+import logging
 import os
 
+from fastapi import Depends
 from fastapi import FastAPI
+from sqlalchemy import text
+from sqlalchemy.orm import Session
 
 from app.db.database import Base
 from app.db.database import engine
 from app.db.database import SessionLocal
+from app.db.session import get_db
+
+from app.middleware.rate_limit import RateLimitMiddleware
+from app.middleware.request_id import RequestIdMiddleware
+
+logger = logging.getLogger("ichnos.app")
 
 from app.models.organization import Organization
 from app.models.user import User
@@ -31,6 +45,7 @@ from app.models.glossary_link import GlossaryTermLink
 from app.models.business_process import BusinessProcess, BusinessProcessLink
 from app.models.control import Control
 from app.models.risk import Risk, RiskDatasetLink, RiskProcessLink, RiskControlLink
+from app.models.magic_login_token import MagicLoginToken
 
 
 
@@ -197,6 +212,13 @@ ALLOWED_ORIGINS = [
     if origin.strip()
 ]
 
+app.add_middleware(RequestIdMiddleware)
+app.add_middleware(RateLimitMiddleware)
+
+# CORS is added last so it ends up outermost in the middleware stack -
+# it needs to wrap the rate limiter too, or a 429 response wouldn't
+# carry CORS headers and the frontend would see it as a generic
+# network error instead of a readable "too many requests".
 app.add_middleware(
     CORSMiddleware,
     allow_origins=ALLOWED_ORIGINS,
@@ -205,9 +227,28 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-@app.get("/")
-def health():
+
+def _health_payload(db: Session) -> dict:
+
+    try:
+        db.execute(text("SELECT 1"))
+        database_status = "ok"
+    except Exception:
+        logger.exception("Health check: database connectivity check failed")
+        database_status = "error"
 
     return {
-        "status": "running"
+        "status": "running" if database_status == "ok" else "degraded",
+        "database": database_status,
+        "version": app.version,
     }
+
+
+@app.get("/")
+def root_health(db: Session = Depends(get_db)):
+    return _health_payload(db)
+
+
+@app.get("/health")
+def health(db: Session = Depends(get_db)):
+    return _health_payload(db)

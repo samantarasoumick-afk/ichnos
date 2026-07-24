@@ -32,6 +32,7 @@ type AuthContextValue = {
     password: string,
     organizationName: string
   ) => Promise<void>;
+  loginWithMagicToken: (token: string) => Promise<void>;
   logout: () => void;
 };
 
@@ -120,6 +121,19 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     await login(email, password);
   }
 
+  async function loginWithMagicToken(token: string) {
+    const response = await api.post<{ access_token: string }>(
+      "/api/auth/magic-link/verify",
+      { token }
+    );
+
+    window.localStorage.setItem(TOKEN_KEY, response.data.access_token);
+
+    await refreshCurrentUser();
+
+    router.push("/");
+  }
+
   function logout() {
     window.localStorage.removeItem(TOKEN_KEY);
     setUser(null);
@@ -128,7 +142,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   return (
     <AuthContext.Provider
-      value={{ user, loading, login, register, logout }}
+      value={{ user, loading, login, register, loginWithMagicToken, logout }}
     >
       {children}
     </AuthContext.Provider>

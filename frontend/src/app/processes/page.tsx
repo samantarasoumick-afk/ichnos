@@ -16,8 +16,27 @@ import type {
 const EMPTY_NEW_PROCESS: BusinessProcessCreate = {
   name: "",
   description: "",
+  narrative: "",
   owner: "",
 };
+
+const DATA_CATEGORY_GROUPS: { key: string; label: string; badgeClasses: string }[] = [
+  { key: "MASTER", label: "Master data", badgeClasses: "bg-purple-100 text-purple-700" },
+  { key: "REFERENCE", label: "Reference data", badgeClasses: "bg-blue-100 text-blue-700" },
+  { key: "TRANSACTIONAL", label: "Transactional data", badgeClasses: "bg-amber-100 text-amber-700" },
+  { key: "ANALYTICAL", label: "Analytical data", badgeClasses: "bg-green-100 text-green-700" },
+  { key: "UNCATEGORIZED", label: "Not yet classified", badgeClasses: "bg-gray-100 text-gray-600" },
+];
+
+function groupDatasetsByCategory(datasets: BusinessProcessDatasetSummary[]) {
+  const groups: Record<string, BusinessProcessDatasetSummary[]> = {};
+  for (const dataset of datasets) {
+    const key = dataset.data_category || "UNCATEGORIZED";
+    if (!groups[key]) groups[key] = [];
+    groups[key].push(dataset);
+  }
+  return groups;
+}
 
 export default function ProcessesPage() {
   const { user, loading: authLoading } = useRequireAuth();
@@ -76,6 +95,7 @@ export default function ProcessesPage() {
       const response = await api.post<BusinessProcess>("/api/business-processes", {
         name: newProcess.name.trim(),
         description: newProcess.description || null,
+        narrative: newProcess.narrative || null,
         owner: newProcess.owner || null,
       });
       setProcesses((prev) =>
@@ -96,6 +116,7 @@ export default function ProcessesPage() {
     setEditProcessForm({
       name: process.name,
       description: process.description || "",
+      narrative: process.narrative || "",
       owner: process.owner || "",
     });
   }
@@ -109,6 +130,7 @@ export default function ProcessesPage() {
         {
           name: editProcessForm.name,
           description: editProcessForm.description || null,
+          narrative: editProcessForm.narrative || null,
           owner: editProcessForm.owner || null,
         }
       );
@@ -203,6 +225,24 @@ export default function ProcessesPage() {
               setNewProcess((prev) => ({ ...prev, description: event.target.value }))
             }
           />
+          <div>
+            <textarea
+              placeholder={
+                "Narrative - how does the data actually flow here? e.g. \"A Customer " +
+                "(Master) orders (Transactional) from a Store (Master) in Mumbai (Reference).\""
+              }
+              rows={2}
+              className="w-full rounded-lg border px-3 py-2 text-sm"
+              value={newProcess.narrative}
+              onChange={(event) =>
+                setNewProcess((prev) => ({ ...prev, narrative: event.target.value }))
+              }
+            />
+            <div className="mt-1 text-xs text-gray-400">
+              Optional. A plain-language story of which Master/Reference data interacts via
+              Transactional data, and what Analytical data comes out of it.
+            </div>
+          </div>
           <input
             type="text"
             placeholder="Owner"
@@ -247,6 +287,15 @@ export default function ProcessesPage() {
                   setEditProcessForm((prev) => ({ ...prev, description: event.target.value }))
                 }
               />
+              <textarea
+                placeholder="Narrative - how the data actually flows"
+                rows={2}
+                className="w-full rounded-lg border px-3 py-2 text-sm"
+                value={editProcessForm.narrative ?? ""}
+                onChange={(event) =>
+                  setEditProcessForm((prev) => ({ ...prev, narrative: event.target.value }))
+                }
+              />
               <input
                 type="text"
                 placeholder="Owner"
@@ -288,6 +337,11 @@ export default function ProcessesPage() {
                   {process.description && (
                     <div className="mt-1 text-sm text-gray-600">{process.description}</div>
                   )}
+                  {process.narrative && (
+                    <div className="mt-2 rounded-lg bg-gray-50 px-3 py-2 text-sm italic text-gray-700">
+                      &ldquo;{process.narrative}&rdquo;
+                    </div>
+                  )}
                   <div className="mt-3 text-xs text-gray-500">
                     {process.owner || "No owner"} &middot; {process.dataset_count} dataset
                     {process.dataset_count === 1 ? "" : "s"}
@@ -325,16 +379,32 @@ export default function ProcessesPage() {
                   )}
 
                   {datasetsByProcess[process.id] && datasetsByProcess[process.id].length > 0 && (
-                    <div className="flex flex-wrap gap-2">
-                      {datasetsByProcess[process.id].map((dataset) => (
-                        <Link
-                          key={dataset.id}
-                          href={`/datasets/${dataset.id}`}
-                          className="rounded-full bg-gray-100 px-3 py-1 text-xs text-gray-700 hover:bg-gray-200"
-                        >
-                          {dataset.schema_name}.{dataset.name}
-                        </Link>
-                      ))}
+                    <div className="space-y-3">
+                      {DATA_CATEGORY_GROUPS.map((group) => {
+                        const datasetsInGroup =
+                          groupDatasetsByCategory(datasetsByProcess[process.id])[group.key];
+                        if (!datasetsInGroup || datasetsInGroup.length === 0) return null;
+                        return (
+                          <div key={group.key}>
+                            <div
+                              className={`mb-1.5 inline-block rounded-full px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide ${group.badgeClasses}`}
+                            >
+                              {group.label}
+                            </div>
+                            <div className="flex flex-wrap gap-2">
+                              {datasetsInGroup.map((dataset) => (
+                                <Link
+                                  key={dataset.id}
+                                  href={`/datasets/${dataset.id}`}
+                                  className="rounded-full bg-gray-100 px-3 py-1 text-xs text-gray-700 hover:bg-gray-200"
+                                >
+                                  {dataset.schema_name}.{dataset.name}
+                                </Link>
+                              ))}
+                            </div>
+                          </div>
+                        );
+                      })}
                     </div>
                   )}
                 </div>

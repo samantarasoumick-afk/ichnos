@@ -26,6 +26,16 @@ class UserLogin(BaseModel):
     password: str
 
 
+class MagicLinkRequest(BaseModel):
+
+    email: EmailStr
+
+
+class MagicLinkVerify(BaseModel):
+
+    token: str
+
+
 class TeamMemberInvite(BaseModel):
 
     email: EmailStr

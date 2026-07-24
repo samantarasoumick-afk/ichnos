@@ -45,6 +45,13 @@ class BusinessProcess(Base):
 
     description = Column(Text, nullable=True)
 
+    # Free-text story of how the linked datasets actually interact -
+    # e.g. "A Customer (Master) orders (Transactional) from a Store
+    # (Master) in Mumbai (Reference)." Written by a steward, displayed
+    # alongside the linked datasets grouped by data_category
+    # (Master/Reference/Transactional/Analytical) on the process page.
+    narrative = Column(Text, nullable=True)
+
     owner = Column(String, nullable=True)
 
     organization_id = Column(

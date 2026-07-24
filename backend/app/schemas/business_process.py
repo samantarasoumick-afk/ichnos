@@ -10,6 +10,7 @@ class BusinessProcessCreate(BaseModel):
 
     name: str
     description: Optional[str] = None
+    narrative: Optional[str] = None
     owner: Optional[str] = None
 
 
@@ -17,6 +18,7 @@ class BusinessProcessUpdate(BaseModel):
 
     name: Optional[str] = None
     description: Optional[str] = None
+    narrative: Optional[str] = None
     owner: Optional[str] = None
 
 
@@ -25,6 +27,7 @@ class BusinessProcessResponse(BaseModel):
     id: UUID
     name: str
     description: Optional[str] = None
+    narrative: Optional[str] = None
     owner: Optional[str] = None
     dataset_count: int = 0
     created_at: Optional[datetime] = None
@@ -46,6 +49,8 @@ class BusinessProcessLinkResponse(BaseModel):
     process_name: str
     dataset_id: UUID
     created_at: Optional[datetime] = None
+    glossary_term_created: bool = False
+    glossary_term_name: Optional[str] = None
 
 
 class BusinessProcessDatasetSummary(BaseModel):
@@ -53,3 +58,8 @@ class BusinessProcessDatasetSummary(BaseModel):
     id: UUID
     name: str
     schema_name: str
+    data_category: Optional[str] = None
+    system_role: Optional[str] = None
+
+    class Config:
+        from_attributes = True

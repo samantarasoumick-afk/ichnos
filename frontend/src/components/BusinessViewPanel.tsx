@@ -9,6 +9,7 @@ import api from "../services/api";
 import type {
   BusinessGlossaryTerm,
   BusinessProcess,
+  BusinessProcessLinkResult,
   DataContract,
   DataQuality,
   Dataset,
@@ -66,6 +67,7 @@ export default function BusinessViewPanel({
 
   const [selectedProcessId, setSelectedProcessId] = useState("");
   const [linkingProcess, setLinkingProcess] = useState(false);
+  const [processLinkMessage, setProcessLinkMessage] = useState<string | null>(null);
 
   async function loadTermLinks() {
     try {
@@ -152,11 +154,22 @@ export default function BusinessViewPanel({
 
     try {
       setLinkingProcess(true);
-      await api.post(`/api/business-processes/${selectedProcessId}/datasets`, {
-        dataset_id: dataset.id,
-      });
+      setProcessLinkMessage(null);
+      const response = await api.post<BusinessProcessLinkResult>(
+        `/api/business-processes/${selectedProcessId}/datasets`,
+        { dataset_id: dataset.id }
+      );
       setSelectedProcessId("");
       await loadProcessLinks();
+
+      if (response.data.glossary_term_name) {
+        setProcessLinkMessage(
+          response.data.glossary_term_created
+            ? `Linked. Created glossary term "${response.data.glossary_term_name}" (draft - review it on the Glossary page).`
+            : `Linked. Reused existing glossary term "${response.data.glossary_term_name}".`
+        );
+        await loadTermLinks();
+      }
     } catch (error) {
       console.error(error);
       alert("Unable to link that process - it may already be linked.");
@@ -309,6 +322,12 @@ export default function BusinessViewPanel({
             <div className="text-sm text-gray-500">Not linked to a business process yet.</div>
           )}
         </div>
+
+        {processLinkMessage && (
+          <div className="mt-3 rounded-lg bg-green-50 px-3 py-2 text-xs text-green-700">
+            {processLinkMessage}
+          </div>
+        )}
 
         {canEdit && (
           <div className="flex flex-wrap items-center gap-2 mt-4 pt-4 border-t">

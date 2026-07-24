@@ -1,4 +1,7 @@
+import hashlib
+import os
 import re
+import secrets
 import uuid
 
 from datetime import datetime, timedelta
@@ -12,9 +15,12 @@ from sqlalchemy.orm import Session
 from app.db.session import get_db
 
 from app.models.audit_log import AuditLog
+from app.models.magic_login_token import MagicLoginToken
 from app.models.user import User
 from app.models.organization import Organization
 
+from app.schemas.user import MagicLinkRequest
+from app.schemas.user import MagicLinkVerify
 from app.schemas.user import UserCreate
 from app.schemas.user import UserLogin
 
@@ -26,12 +32,39 @@ from app.auth.jwt_handler import create_access_token
 from app.auth.dependencies import get_current_user
 
 from app.services.audit_service import log_audit_event
+from app.services.email_service import send_email
 
 
 router = APIRouter(
     prefix="/api/auth",
     tags=["auth"]
 )
+
+# Where the frontend actually lives, for building the link in the
+# magic-link email. Defaults to local dev; self-hosted setups should
+# set this to the app's real public URL (e.g.
+# https://app.ichnos.yourdomain.com) once one exists - see
+# docs/SELF_HOSTING.md.
+FRONTEND_URL = os.getenv("FRONTEND_URL", "http://localhost:3000").rstrip("/")
+
+# Passwordless login: a short-lived, single-use link mailed to the
+# account's own address. This doubles as the de facto password-reset
+# path (there's no separate "reset my password" flow) - if you can
+# receive mail at the account's address, you can always get back in.
+MAGIC_LINK_EXPIRE_MINUTES = 15
+MAGIC_LINK_REQUEST_LIMIT = 3
+MAGIC_LINK_REQUEST_WINDOW_MINUTES = 15
+
+MAGIC_LINK_GENERIC_RESPONSE = {
+    "message": (
+        "If an account exists for that email, we've sent a login link. "
+        "It expires in 15 minutes."
+    )
+}
+
+
+def _hash_token(raw_token: str) -> str:
+    return hashlib.sha256(raw_token.encode()).hexdigest()
 
 # Brute-force protection on login: after this many failed attempts
 # for a given account within the window, further attempts are
@@ -209,6 +242,127 @@ def login_user(
 
     return {
         "access_token": token,
+        "token_type": "bearer"
+    }
+
+
+@router.post("/magic-link/request")
+def request_magic_link(
+    payload: MagicLinkRequest,
+    db: Session = Depends(get_db)
+):
+    """
+    Always returns the same generic message regardless of whether the
+    email matches an account, is inactive, or is being rate-limited -
+    a different response for each case would let someone enumerate
+    which emails have accounts just by requesting links for them.
+    """
+
+    existing_user = (
+        db.query(User)
+        .filter(User.email == payload.email)
+        .first()
+    )
+
+    if not existing_user or not existing_user.is_active:
+        return MAGIC_LINK_GENERIC_RESPONSE
+
+    cutoff = datetime.utcnow() - timedelta(minutes=MAGIC_LINK_REQUEST_WINDOW_MINUTES)
+
+    recent_requests = (
+        db.query(AuditLog)
+        .filter(
+            AuditLog.actor_user_id == existing_user.id,
+            AuditLog.action == "user.magic_link_requested",
+            AuditLog.created_at >= cutoff,
+        )
+        .count()
+    )
+
+    if recent_requests >= MAGIC_LINK_REQUEST_LIMIT:
+        return MAGIC_LINK_GENERIC_RESPONSE
+
+    raw_token = secrets.token_urlsafe(32)
+
+    db.add(
+        MagicLoginToken(
+            user_id=existing_user.id,
+            token_hash=_hash_token(raw_token),
+            expires_at=datetime.utcnow() + timedelta(minutes=MAGIC_LINK_EXPIRE_MINUTES),
+        )
+    )
+
+    login_url = f"{FRONTEND_URL}/login/magic?token={raw_token}"
+
+    send_email(
+        to=existing_user.email,
+        subject="Your Ichnos login link",
+        body=(
+            "Click the link below to sign in to Ichnos. It expires in "
+            f"{MAGIC_LINK_EXPIRE_MINUTES} minutes and can only be used once.\n\n"
+            f"{login_url}\n\n"
+            "If you didn't request this, you can safely ignore this email - "
+            "your account is unaffected."
+        ),
+    )
+
+    log_audit_event(
+        db,
+        organization_id=existing_user.organization_id,
+        action="user.magic_link_requested",
+        actor_user_id=existing_user.id,
+        actor_email=existing_user.email,
+    )
+    db.commit()
+
+    return MAGIC_LINK_GENERIC_RESPONSE
+
+
+@router.post("/magic-link/verify")
+def verify_magic_link(
+    payload: MagicLinkVerify,
+    db: Session = Depends(get_db)
+):
+
+    token_hash = _hash_token(payload.token)
+
+    token = (
+        db.query(MagicLoginToken)
+        .filter(MagicLoginToken.token_hash == token_hash)
+        .first()
+    )
+
+    if not token or token.used_at is not None or token.expires_at < datetime.utcnow():
+        raise HTTPException(
+            status_code=400,
+            detail="This login link is invalid or has expired. Request a new one."
+        )
+
+    user = db.query(User).filter(User.id == token.user_id).first()
+
+    if not user or not user.is_active:
+        raise HTTPException(
+            status_code=400,
+            detail="This login link is invalid or has expired. Request a new one."
+        )
+
+    token.used_at = datetime.utcnow()
+
+    access_token = create_access_token({
+        "sub": user.email
+    })
+
+    log_audit_event(
+        db,
+        organization_id=user.organization_id,
+        action="user.magic_link_login",
+        actor_user_id=user.id,
+        actor_email=user.email,
+    )
+    db.commit()
+
+    return {
+        "access_token": access_token,
         "token_type": "bearer"
     }
 

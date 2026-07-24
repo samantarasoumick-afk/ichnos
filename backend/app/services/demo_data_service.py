@@ -149,11 +149,19 @@ def _link_term(db: Session, term: BusinessGlossaryTerm, dataset: Dataset, column
     )
 
 
-def _business_process(db: Session, organization_id: str, name: str, description: str, owner: str) -> BusinessProcess:
+def _business_process(
+    db: Session,
+    organization_id: str,
+    name: str,
+    description: str,
+    owner: str,
+    narrative: str | None = None,
+) -> BusinessProcess:
 
     process = BusinessProcess(
         name=name,
         description=description,
+        narrative=narrative,
         owner=owner,
         organization_id=organization_id,
         is_seed_data=True,
@@ -859,6 +867,11 @@ def seed_demo_data(db: Session, current_user: User) -> dict:
         db, organization_id, "Order-to-Cash",
         "Everything from a customer placing an order through to payment being collected and reconciled.",
         "Revenue Ops",
+        narrative=(
+            "A Customer (Master data) places an Order (Transactional data), which is "
+            "settled through a Payment (Transactional data). Those transactions roll up "
+            "into fct_customer_orders and the Revenue Dashboard (Analytical data)."
+        ),
     )
     for ds in (orders, payments, stg_orders, stg_payments, fct_customer_orders, revenue_dashboard):
         _link_process(db, order_to_cash, ds)

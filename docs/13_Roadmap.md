@@ -26,14 +26,21 @@ transformations; full-graph and dataset-scoped lineage views.
 simulated; surfaced per-dataset and blended with lineage inheritance.
 
 **Governance** - business glossary with dataset/column-level linking;
-business process repository; data contracts (schema-level + breach
-logging); certification request/approval workflow; governance
-maturity score with recommendations; audit log with filtering and
-CSV export; governance discussion threads (Question / Proposal /
-Issue, the last with stakeholder follow-through); a risk register
-(likelihood x impact scoring, linked to datasets and processes) and a
-reusable control library, with risk coverage feeding into the
-maturity score as its own dimension.
+business process repository, now with a plain-language "narrative"
+field per process (e.g. "A Customer (Master) orders (Transactional)
+from a Store (Master) in Mumbai (Reference)") and datasets grouped by
+Master/Reference/Transactional/Analytical classification when viewing
+a process; linking a dataset to a process auto-creates or reuses a
+glossary term for it, so the glossary builds itself as processes get
+modeled instead of being maintained as a wholly separate exercise;
+data contracts (schema-level + breach logging); certification
+request/approval workflow; governance maturity score with
+recommendations; audit log with filtering and CSV export; governance
+discussion threads (Question / Proposal / Issue, the last with
+stakeholder follow-through); a risk register (likelihood x impact
+scoring, linked to datasets and processes) and a reusable control
+library, with risk coverage feeding into the maturity score as its
+own dimension.
 
 **Privacy** - DPDP/GDPR-oriented sensitivity classification, purpose
 mapping, consent tracking, retention policy enforcement, privacy
@@ -60,19 +67,30 @@ customers.
 - [x] Git version control + CI (backend pytest, frontend typecheck/
       lint/build on every push and PR)
 - [x] Dockerized backend + frontend, docker-compose for self-hosting
-- [ ] Independent security review of the codebase
-- [ ] Password reset flow (currently: none - admin sets a password
-      directly when inviting someone, which is both insecure and a
-      poor first-run experience)
-- [ ] At least one SSO option (Google OAuth is the highest-leverage
-      first step) - currently email+password only
-- [ ] General API rate limiting (today only the login endpoint is
-      protected; every other endpoint is unlimited)
+- [x] Independent security review of the codebase - see
+      `docs/SECURITY_REVIEW.md`; open items from it are tracked there,
+      not duplicated here
+- [x] Passwordless "magic link" login, doubling as the password-
+      recovery path (there's no separate reset-token flow - a user who
+      can receive mail at their account address can always get back
+      in). Covers the practical gap the old "admin sets a password
+      directly" flow left open.
+- [ ] A true SSO option (Google OAuth or similar) - magic-link login
+      above covers the "no self-serve recovery path" problem, but
+      real SSO/SAML is still open, and needs you to register an OAuth
+      app with a provider before it can be wired up
+- [x] General API rate limiting (`app/middleware/rate_limit.py`) -
+      IP-keyed (X-Forwarded-For-aware, so it survives sitting behind
+      the website's nginx reverse proxy), on top of the existing
+      per-account login lockout
 - [ ] Secrets management beyond a `.env` file once this leaves a
       single laptop (a proper vault or cloud secrets manager)
-- [ ] Error tracking (e.g. Sentry) and a real `/health` endpoint
-      (today `/` just returns `{"status": "running"}`)
-- [ ] Structured logging
+- [ ] Error tracking (e.g. Sentry) - needs a Sentry account/DSN from
+      you before it can be wired up, not done this pass
+- [x] A real `/health` endpoint (now checks actual DB connectivity,
+      not just "the process is up") and structured JSON logging with
+      a request ID on every log line, tying a user-reported error back
+      to the exact log lines it produced
 
 ## Phase 2: Product completion (before charging money)
 

@@ -24,6 +24,12 @@ os.environ.setdefault("ENCRYPTION_KEY", Fernet.generate_key().decode())
 os.environ.setdefault("CORS_ALLOWED_ORIGINS", "http://localhost:3000")
 os.environ.setdefault("AUTO_CREATE_SCHEMA", "false")
 os.environ.setdefault("DEMO_SEED", "false")
+# The general API rate limiter is IP-keyed and in-memory; the whole
+# suite runs from a single TestClient "IP" and easily exceeds any
+# reasonable per-minute limit well before it exceeds anything a real
+# user would hit. Off by default in tests; test_rate_limiting.py
+# turns it on for its own module only.
+os.environ.setdefault("RATE_LIMIT_ENABLED", "false")
 
 if os.path.exists(_DB_PATH):
     os.remove(_DB_PATH)
