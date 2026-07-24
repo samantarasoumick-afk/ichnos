@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useEffect, useState } from "react";
 
 import DataQualityBars from "./DataQualityBars";
@@ -15,6 +16,7 @@ import type {
   EffectiveQuality,
   GlossaryTermLink,
   Lineage,
+  Risk,
 } from "../types/metadata";
 
 type Props = {
@@ -35,6 +37,12 @@ function contractBadgeClasses(status: string | undefined) {
   return "bg-gray-100 text-gray-500"; // NO_CONTRACT
 }
 
+function riskLevelBadgeClasses(level: string) {
+  if (level === "HIGH") return "bg-red-100 text-red-700";
+  if (level === "MEDIUM") return "bg-yellow-100 text-yellow-700";
+  return "bg-green-100 text-green-700";
+}
+
 export default function BusinessViewPanel({
   dataset,
   columns,
@@ -50,6 +58,7 @@ export default function BusinessViewPanel({
   const [processLinks, setProcessLinks] = useState<BusinessProcess[]>([]);
   const [allProcesses, setAllProcesses] = useState<BusinessProcess[]>([]);
   const [contracts, setContracts] = useState<DataContract[]>([]);
+  const [risks, setRisks] = useState<Risk[]>([]);
 
   const [selectedTermId, setSelectedTermId] = useState("");
   const [selectedColumnId, setSelectedColumnId] = useState("");
@@ -79,19 +88,27 @@ export default function BusinessViewPanel({
   useEffect(() => {
     async function loadAll() {
       try {
-        const [termLinksResponse, allTermsResponse, processLinksResponse, allProcessesResponse, contractsResponse] =
-          await Promise.all([
-            api.get<GlossaryTermLink[]>(`/api/glossary-links/dataset/${dataset.id}`),
-            api.get<BusinessGlossaryTerm[]>("/api/governance/glossary"),
-            api.get<BusinessProcess[]>(`/api/business-processes/dataset/${dataset.id}`),
-            api.get<BusinessProcess[]>("/api/business-processes"),
-            api.get<DataContract[]>(`/api/data-contracts/dataset/${dataset.id}`),
-          ]);
+        const [
+          termLinksResponse,
+          allTermsResponse,
+          processLinksResponse,
+          allProcessesResponse,
+          contractsResponse,
+          risksResponse,
+        ] = await Promise.all([
+          api.get<GlossaryTermLink[]>(`/api/glossary-links/dataset/${dataset.id}`),
+          api.get<BusinessGlossaryTerm[]>("/api/governance/glossary"),
+          api.get<BusinessProcess[]>(`/api/business-processes/dataset/${dataset.id}`),
+          api.get<BusinessProcess[]>("/api/business-processes"),
+          api.get<DataContract[]>(`/api/data-contracts/dataset/${dataset.id}`),
+          api.get<Risk[]>(`/api/risks/dataset/${dataset.id}`),
+        ]);
         setTermLinks(termLinksResponse.data);
         setAllTerms(allTermsResponse.data);
         setProcessLinks(processLinksResponse.data);
         setAllProcesses(allProcessesResponse.data);
         setContracts(contractsResponse.data);
+        setRisks(risksResponse.data);
       } catch (error) {
         console.error(error);
       }
@@ -340,6 +357,48 @@ export default function BusinessViewPanel({
           </div>
         ) : (
           <div className="text-sm text-gray-500">No active contract on this dataset.</div>
+        )}
+      </div>
+
+      <div className="bg-white rounded-xl p-6 shadow lg:col-span-2">
+        <div className="flex items-center justify-between mb-1">
+          <h2 className="text-xl font-semibold">Risks</h2>
+          <Link href="/risks" className="text-xs text-gray-500 hover:text-black hover:underline">
+            View Risk Register &rarr;
+          </Link>
+        </div>
+        <p className="text-sm text-gray-500 mb-4">
+          Risk entries assessed against this dataset, with residual risk after any
+          linked controls.
+        </p>
+        {risks.length === 0 ? (
+          <div className="text-sm text-gray-500">
+            No risks logged against this dataset yet.
+          </div>
+        ) : (
+          <div className="space-y-2">
+            {risks.map((risk) => (
+              <div
+                key={risk.id}
+                className="flex items-center justify-between gap-3 rounded-lg border px-3 py-2"
+              >
+                <div>
+                  <div className="text-sm font-semibold">{risk.title}</div>
+                  <div className="text-xs text-gray-500 mt-0.5">
+                    {risk.category.replace("_", " ")} &middot; {risk.status}
+                    {risk.owner_email && <> &middot; {risk.owner_email}</>}
+                  </div>
+                </div>
+                <span
+                  className={`shrink-0 text-xs px-2 py-1 rounded-full font-medium ${riskLevelBadgeClasses(
+                    risk.residual_level
+                  )}`}
+                >
+                  Residual: {risk.residual_level}
+                </span>
+              </div>
+            ))}
+          </div>
         )}
       </div>
 

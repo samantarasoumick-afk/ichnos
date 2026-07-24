@@ -1,11 +1,10 @@
 # Roadmap
 
-Last revised: 2026-07-23, alongside the rollout-readiness assessment
-below. Everything under "Delivered" is built and covered by the
-backend test suite (282 passing tests as of this revision) and
-frontend typecheck/lint. Everything under Phases 1-3 is what stands
-between here and a real rollout - see the verdict at the end for how
-to read this list.
+Last revised: 2026-07-25. Everything under "Delivered" is built and
+covered by the backend test suite (292 passing tests as of this
+revision) and frontend typecheck/lint. Everything under Phases 1-3 is
+what stands between here and a real rollout - see the verdict at the
+end for how to read this list.
 
 ## Delivered
 
@@ -31,7 +30,10 @@ business process repository; data contracts (schema-level + breach
 logging); certification request/approval workflow; governance
 maturity score with recommendations; audit log with filtering and
 CSV export; governance discussion threads (Question / Proposal /
-Issue, the last with stakeholder follow-through).
+Issue, the last with stakeholder follow-through); a risk register
+(likelihood x impact scoring, linked to datasets and processes) and a
+reusable control library, with risk coverage feeding into the
+maturity score as its own dimension.
 
 **Privacy** - DPDP/GDPR-oriented sensitivity classification, purpose
 mapping, consent tracking, retention policy enforcement, privacy

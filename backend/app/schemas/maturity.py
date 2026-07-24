@@ -7,6 +7,7 @@ class MaturityCoverage(BaseModel):
     pct_certified: int
     pct_with_active_contract: int
     pct_pii_with_documented_purpose: int
+    pct_high_sensitivity_with_assessed_risk: int
 
 
 class MaturityAverageScores(BaseModel):

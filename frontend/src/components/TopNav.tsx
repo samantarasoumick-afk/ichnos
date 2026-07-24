@@ -31,6 +31,10 @@ export default function TopNav() {
           Governance
         </Link>
 
+        <Link href="/risks" className="text-sm text-gray-600 hover:text-black">
+          Risks
+        </Link>
+
         <Link href="/glossary" className="text-sm text-gray-600 hover:text-black">
           Glossary
         </Link>

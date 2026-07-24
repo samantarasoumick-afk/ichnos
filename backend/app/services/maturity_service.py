@@ -17,6 +17,7 @@ for.
 from sqlalchemy.orm import Session
 
 from app.models.dataset import Dataset
+from app.models.risk import RiskDatasetLink
 
 
 # Below this coverage fraction on a dimension, it's worth calling out
@@ -55,6 +56,7 @@ def compute_maturity(db: Session, organization_id: str) -> dict:
                 "pct_certified": 0,
                 "pct_with_active_contract": 0,
                 "pct_pii_with_documented_purpose": 0,
+                "pct_high_sensitivity_with_assessed_risk": 0,
             },
             "average_scores": {
                 "governance_score": 0,
@@ -80,11 +82,32 @@ def compute_maturity(db: Session, organization_id: str) -> dict:
     pii_bearing = [d for d in datasets if d.sensitivity_score in ("MEDIUM", "HIGH")]
     pii_with_purpose = sum(1 for d in pii_bearing if d.purpose)
 
+    # Same "only judge what's actually applicable" philosophy for risk
+    # assessment: a HIGH-sensitivity dataset is exactly the kind of
+    # thing a real risk register should have an entry for, so this
+    # rewards actually using the Risks feature on the datasets where
+    # it matters most, not just having some risks logged somewhere.
+    high_sensitivity = [d for d in datasets if d.sensitivity_score == "HIGH"]
+    high_sensitivity_ids = {d.id for d in high_sensitivity}
+    with_assessed_risk = 0
+    if high_sensitivity_ids:
+        linked_dataset_ids = {
+            row.dataset_id for row in (
+                db.query(RiskDatasetLink)
+                .filter(RiskDatasetLink.dataset_id.in_(high_sensitivity_ids))
+                .all()
+            )
+        }
+        with_assessed_risk = len(linked_dataset_ids)
+
     pct_with_steward = with_steward / total
     pct_certified = certified / total
     pct_with_active_contract = with_active_contract / total
     pct_pii_with_purpose = (
         (pii_with_purpose / len(pii_bearing)) if pii_bearing else 1.0
+    )
+    pct_high_sensitivity_with_risk = (
+        (with_assessed_risk / len(high_sensitivity)) if high_sensitivity else 1.0
     )
 
     avg_governance = sum(d.governance_score for d in datasets) / total
@@ -96,7 +119,8 @@ def compute_maturity(db: Session, organization_id: str) -> dict:
         + pct_certified
         + pct_with_active_contract
         + pct_pii_with_purpose
-    ) / 4
+        + pct_high_sensitivity_with_risk
+    ) / 5
 
     overall_score = round(
         (coverage_score + avg_governance + avg_privacy + avg_quality) / 4
@@ -135,6 +159,13 @@ def compute_maturity(db: Session, organization_id: str) -> dict:
             f"PII-bearing dataset(s) that are missing one."
         ))
 
+    if high_sensitivity:
+        candidate_recommendations.append((
+            pct_high_sensitivity_with_risk,
+            f"Log a risk assessment for your {len(high_sensitivity) - with_assessed_risk} "
+            f"high-sensitivity dataset(s) that don't have one yet."
+        ))
+
     weakest_first = sorted(
         (item for item in candidate_recommendations if item[0] < RECOMMENDATION_THRESHOLD),
         key=lambda item: item[0]
@@ -157,6 +188,7 @@ def compute_maturity(db: Session, organization_id: str) -> dict:
             "pct_certified": round(pct_certified * 100),
             "pct_with_active_contract": round(pct_with_active_contract * 100),
             "pct_pii_with_documented_purpose": round(pct_pii_with_purpose * 100),
+            "pct_high_sensitivity_with_assessed_risk": round(pct_high_sensitivity_with_risk * 100),
         },
         "average_scores": {
             "governance_score": round(avg_governance),

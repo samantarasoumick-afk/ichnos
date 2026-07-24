@@ -100,6 +100,10 @@ export default function MaturityPanel() {
             label="PII datasets with a documented purpose"
             pct={maturity.coverage.pct_pii_with_documented_purpose}
           />
+          <CoverageBar
+            label="High-sensitivity datasets with an assessed risk"
+            pct={maturity.coverage.pct_high_sensitivity_with_assessed_risk}
+          />
         </div>
 
         <div>

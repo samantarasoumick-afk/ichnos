@@ -440,6 +440,7 @@ export type MaturityOverview = {
     pct_certified: number;
     pct_with_active_contract: number;
     pct_pii_with_documented_purpose: number;
+    pct_high_sensitivity_with_assessed_risk: number;
   };
   average_scores: {
     governance_score: number;
@@ -447,4 +448,97 @@ export type MaturityOverview = {
     quality_score: number;
   };
   recommended_next_steps: string[];
+};
+
+export type RiskCategory =
+  | "PRIVACY"
+  | "SECURITY"
+  | "OPERATIONAL"
+  | "COMPLIANCE"
+  | "DATA_QUALITY"
+  | "OTHER";
+
+export type RiskLevel = "LOW" | "MEDIUM" | "HIGH";
+
+export type RiskStatus = "OPEN" | "MITIGATED" | "ACCEPTED" | "CLOSED";
+
+export type ControlType = "PREVENTIVE" | "DETECTIVE" | "CORRECTIVE";
+
+export type ControlStatus = "EFFECTIVE" | "INEFFECTIVE" | "NOT_TESTED";
+
+export type Control = {
+  id: string;
+  name: string;
+  description?: string | null;
+  control_type: ControlType;
+  status: ControlStatus;
+  owner_user_id?: string | null;
+  owner_email?: string | null;
+  last_tested_at?: string | null;
+  risk_count: number;
+  created_at?: string;
+  updated_at?: string;
+};
+
+export type ControlCreate = {
+  name: string;
+  description?: string;
+  control_type: ControlType;
+  owner_user_id?: string;
+};
+
+export type Risk = {
+  id: string;
+  title: string;
+  description?: string | null;
+  category: RiskCategory;
+  likelihood: RiskLevel;
+  impact: RiskLevel;
+  status: RiskStatus;
+  owner_user_id?: string | null;
+  owner_email?: string | null;
+  created_by: string;
+  created_by_email?: string | null;
+  inherent_score: number;
+  inherent_level: RiskLevel;
+  residual_score: number;
+  residual_level: RiskLevel;
+  effective_control_count: number;
+  dataset_count: number;
+  process_count: number;
+  control_count: number;
+  created_at?: string;
+  updated_at?: string;
+};
+
+export type RiskCreate = {
+  title: string;
+  description?: string;
+  category: RiskCategory;
+  likelihood: RiskLevel;
+  impact: RiskLevel;
+  owner_user_id?: string;
+};
+
+export type RiskLinkedDataset = {
+  id: string;
+  name: string;
+  schema_name: string;
+};
+
+export type RiskLinkedProcess = {
+  id: string;
+  name: string;
+};
+
+export type RiskLinkedControl = {
+  id: string;
+  name: string;
+  status: ControlStatus;
+};
+
+export type RiskDetail = Risk & {
+  linked_datasets: RiskLinkedDataset[];
+  linked_processes: RiskLinkedProcess[];
+  linked_controls: RiskLinkedControl[];
 };

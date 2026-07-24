@@ -29,6 +29,8 @@ from app.models.certification_request import CertificationRequest
 from app.models.governance_thread import GovernanceThread, GovernanceThreadReply
 from app.models.glossary_link import GlossaryTermLink
 from app.models.business_process import BusinessProcess, BusinessProcessLink
+from app.models.control import Control
+from app.models.risk import Risk, RiskDatasetLink, RiskProcessLink, RiskControlLink
 
 
 
@@ -55,6 +57,8 @@ from app.api.governance_threads import router as governance_threads_router
 from app.api.demo import router as demo_router
 from app.api.glossary_links import router as glossary_links_router
 from app.api.business_processes import router as business_processes_router
+from app.api.risks import router as risks_router
+from app.api.controls import router as controls_router
 from app.api.columns import (
     router as columns_router
 )
@@ -176,6 +180,8 @@ app.include_router(governance_threads_router)
 app.include_router(demo_router)
 app.include_router(glossary_links_router)
 app.include_router(business_processes_router)
+app.include_router(risks_router)
+app.include_router(controls_router)
 
 # CORS_ALLOWED_ORIGINS is a comma-separated list of exact origins,
 # e.g. "https://app.example.com,http://localhost:3000". Wildcard
