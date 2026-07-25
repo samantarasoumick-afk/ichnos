@@ -13,6 +13,16 @@ COPY package.json package-lock.json* ./
 RUN npm ci
 
 COPY . .
+
+# Next.js resolves next.config.ts's rewrites() (and therefore
+# BACKEND_INTERNAL_URL) at `next build` time, not at container start -
+# so the runtime-only `environment:` value in docker-compose.yml is
+# too late by itself. Accepting it as a build arg here and exporting
+# it as an env var before the build step makes sure the same value
+# ends up baked into both the build and the running container.
+ARG BACKEND_INTERNAL_URL=http://backend:8000
+ENV BACKEND_INTERNAL_URL=$BACKEND_INTERNAL_URL
+
 RUN npm run build
 
 FROM node:20-slim

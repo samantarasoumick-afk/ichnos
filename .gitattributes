@@ -1,0 +1,5 @@
+# Force LF line endings for shell scripts regardless of platform/git
+# config (core.autocrlf) - CRLF here breaks the shebang line inside
+# Docker containers ("no such file or directory" on exec) even though
+# the file works fine when run directly on Windows.
+*.sh text eol=lf
