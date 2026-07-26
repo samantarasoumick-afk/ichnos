@@ -628,3 +628,98 @@ export type QueryLogReport = {
   top_unanswered: QueryGroup[];
   top_overall: QueryGroup[];
 };
+
+export type PlanName = "starter" | "team" | "business" | "enterprise";
+export type BillingCycle = "monthly" | "yearly";
+export type PlanStatus = "trialing" | "active" | "past_due" | "canceled";
+
+export type OrganizationSummary = {
+  id: string;
+  name: string;
+  slug: string;
+  created_at: string;
+  plan: PlanName;
+  billing_cycle: BillingCycle | null;
+  plan_status: PlanStatus;
+  is_suspended: boolean;
+  real_source_count: number;
+  demo_data_loaded: boolean;
+  dataset_count: number;
+  editor_seat_count: number;
+  last_activity_at: string | null;
+  ask_usage_today: number;
+  ask_daily_limit: number | null;
+  max_sources: number | null;
+};
+
+export type OrganizationMember = {
+  id: string;
+  email: string;
+  role: UserRole;
+  is_active: boolean;
+  is_seed_data: boolean;
+};
+
+export type OrganizationActivityEntry = {
+  action: string;
+  actor_email: string | null;
+  details: string | null;
+  created_at: string;
+};
+
+export type OrganizationDetail = {
+  id: string;
+  name: string;
+  slug: string;
+  created_at: string;
+  plan: PlanName;
+  billing_cycle: BillingCycle | null;
+  plan_status: PlanStatus;
+  is_suspended: boolean;
+  stripe_customer_id: string | null;
+  real_source_count: number;
+  max_sources: number | null;
+  demo_data_loaded: boolean;
+  ask_usage_today: number;
+  ask_daily_limit: number | null;
+  members: OrganizationMember[];
+  recent_activity: OrganizationActivityEntry[];
+};
+
+export type OrganizationPlanUpdate = {
+  plan?: PlanName;
+  billing_cycle?: BillingCycle | null;
+  plan_status?: PlanStatus;
+};
+
+export type MarketingFunnelSource = {
+  utm_source: string;
+  count: number;
+};
+
+export type MarketingFunnel = {
+  window_days: number;
+  pageviews: number;
+  unique_visitors: number;
+  signups_started: number;
+  signups_completed: number;
+  visitor_to_signup_rate: number;
+  signups_by_source: MarketingFunnelSource[];
+};
+
+export type BillingEntitlementsSummary = {
+  max_sources: number | null;
+  max_editor_seats: number | null;
+  seats_hard_capped: boolean;
+  ask_daily_limit: number | null;
+  audit_log_retention_days: number | null;
+};
+
+export type BillingStatus = {
+  plan: PlanName;
+  billing_cycle: BillingCycle | null;
+  plan_status: PlanStatus;
+  has_stripe_customer: boolean;
+  stripe_configured: boolean;
+  entitlements: BillingEntitlementsSummary;
+};

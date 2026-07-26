@@ -24,6 +24,7 @@ const GOVERNANCE_ITEMS: NavItem[] = [
 const ADMIN_ITEMS: NavItem[] = [
   { href: "/audit-log", label: "Audit Log" },
   { href: "/team", label: "Team" },
+  { href: "/settings/billing", label: "Billing" },
 ];
 
 // Unlike the items above, /api/query-log is actually enforced
@@ -132,6 +133,19 @@ export default function TopNav() {
           items={user?.role === "admin" ? [...ADMIN_ITEMS, ...ADMIN_ONLY_ITEMS] : ADMIN_ITEMS}
           pathname={pathname}
         />
+
+        {/* DataFe's own operator role (see CurrentUser.is_platform_admin's
+            comment) - completely separate from the org-scoped Admin
+            dropdown above, so it's a distinct link rather than folded
+            into it. */}
+        {user?.is_platform_admin && (
+          <Link
+            href="/platform"
+            className={`${linkClasses("/platform")} rounded-full bg-[#14121F] px-2.5 py-1 !text-white`}
+          >
+            Platform
+          </Link>
+        )}
       </div>
 
       {user && <GlobalSearch />}

@@ -551,4 +551,5 @@ def get_me(
         "organization_id": current_user.organization_id,
         "organization_name": organization.name if organization else None,
         "organization_slug": organization.slug if organization else None,
+        "is_platform_admin": current_user.is_platform_admin,
     }
