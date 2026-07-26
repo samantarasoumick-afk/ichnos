@@ -51,10 +51,16 @@ export default function CreateSourceForm() {
 
   const [secretAccessKey, setSecretAccessKey] = useState("");
 
+  // Stripe-only field - a SaaS API key, not a database connection at
+  // all, so (like S3) this is its own distinct field set rather than
+  // a branch in the SQL fields below.
+  const [stripeApiKey, setStripeApiKey] = useState("");
+
   const [loading, setLoading] = useState(false);
 
   const isSnowflake = type === "snowflake";
   const isS3 = type === "s3";
+  const isStripe = type === "stripe";
 
   function handleTypeChange(nextType: string) {
     setType(nextType);
@@ -88,6 +94,10 @@ export default function CreateSourceForm() {
             region: region || undefined,
             access_key_id: accessKeyId || undefined,
             secret_access_key: secretAccessKey || undefined,
+          }
+        : isStripe
+        ? {
+            api_key: stripeApiKey,
           }
         : {
             host,
@@ -136,6 +146,7 @@ export default function CreateSourceForm() {
           <option value="redshift">Amazon Redshift</option>
           <option value="s3">Amazon S3</option>
           <option value="azure_sql">Azure SQL Database / Synapse</option>
+          <option value="stripe">Stripe</option>
         </select>
 
         <input
@@ -183,7 +194,17 @@ export default function CreateSourceForm() {
           </>
         )}
 
-        {!isS3 && (
+        {isStripe && (
+          <input
+            type="password"
+            placeholder="Stripe secret key (sk_test_... or sk_live_...)"
+            value={stripeApiKey}
+            onChange={(e) => setStripeApiKey(e.target.value)}
+            className="border p-3 rounded col-span-2"
+          />
+        )}
+
+        {!isS3 && !isStripe && (
           <>
             {isSnowflake ? (
 

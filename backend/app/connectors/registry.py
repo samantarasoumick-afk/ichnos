@@ -25,6 +25,7 @@ from app.connectors.snowflake_scanner import scan_snowflake_source
 from app.connectors.redshift_scanner import scan_redshift_source
 from app.connectors.s3_scanner import scan_s3_source
 from app.connectors.azure_sql_scanner import scan_azure_sql_source
+from app.connectors.stripe_scanner import scan_stripe_source, StripeConnectionError
 
 
 SCANNERS = {
@@ -37,6 +38,7 @@ SCANNERS = {
     "s3": scan_s3_source,
     "azure_sql": scan_azure_sql_source,
     "synapse": scan_azure_sql_source,
+    "stripe": scan_stripe_source,
 }
 
 # Connection-failure exception types across every supported driver,
@@ -49,6 +51,7 @@ CONNECTION_ERRORS = (
     pymssql.OperationalError,
     ClientError,
     BotoCoreError,
+    StripeConnectionError,
 )
 
 

@@ -1,7 +1,7 @@
 # Roadmap
 
-Last revised: 2026-07-25. Everything under "Delivered" is built and
-covered by the backend test suite (292 passing tests as of this
+Last revised: 2026-07-26. Everything under "Delivered" is built and
+covered by the backend test suite (339 passing tests as of this
 revision) and frontend typecheck/lint. Everything under Phases 1-3 is
 what stands between here and a real rollout - see the verdict at the
 end for how to read this list.
@@ -10,7 +10,9 @@ end for how to read this list.
 
 **Discovery & catalog** - source registration and scanning for
 Postgres, MySQL, Snowflake, Redshift, S3, Azure SQL/Synapse, dbt
-artifact upload, Tableau Metadata API, and CSV upload; AI-generated
+artifact upload, Tableau Metadata API, Stripe (the first SaaS-of-
+record connector, sampling Customer/Charge/Invoice/Subscription
+objects rather than a SQL schema), and CSV upload; AI-generated
 dataset summaries; column-level metadata (description, sample values,
 classification); auto data classification (Master/Reference/
 Transactional/Analytical); System of Record / System of Reference
@@ -103,21 +105,24 @@ customers.
 - [ ] Billing/subscription enforcement - the pricing strategy doc
       (`docs/DataFe_Pricing_Strategy.docx`) describes tiers, but
       nothing in the app meters or enforces them yet
-- [ ] Masking capability for sensitive columns - the platform already
-      classifies PII/FINANCIAL columns but the Data Owner role is
-      currently scoped to "approval workflows only, no masking"
-- [ ] Data contract enforcement beyond logging: DQ threshold checks
-      and lineage breach propagation (both currently backlog items)
-- [ ] Genuine role-based landing experiences (Data Owner sees a
-      pending-approval queue, Steward sees stewardship gaps, Viewer
-      gets a simplified discovery view) - everyone currently lands on
-      the same generic home page regardless of role
-- [ ] At least one or two connectors matching a typical small
-      company's real stack (Salesforce, HubSpot, QuickBooks/Stripe) -
-      current connectors skew toward data-warehouse-native companies
+- [x] Masking capability for sensitive columns - Data Owner/admin can
+      mask a column's sample values from Viewers; classification now
+      leads to an actual control, not just a label
+- [x] Data contract enforcement beyond logging: DQ threshold checks
+      (a contract can require a minimum quality score) and lineage
+      breach propagation (a downstream dataset surfaces any breached
+      upstream contract reachable via lineage)
+- [x] Genuine role-based landing experiences - Data Owner sees a
+      pending-approval queue, Steward sees a stewardship-gaps queue,
+      Viewer gets a lighter page; admin sees both queues
+- [x] A connector matching a typical small company's real stack:
+      Stripe (SaaS-of-record, not warehouse-native) - Salesforce/
+      HubSpot/QuickBooks remain open, tracked in the backlog
 - [ ] Frontend automated test coverage (Jest/Playwright) - today only
       the backend has tests, so UI regressions can ship silently
-- [ ] Terms of Service, DPA, and privacy policy
+- [x] Terms of Service, DPA, and Privacy Policy - live at /terms.html,
+      /dpa.html, /privacy.html, explicitly flagged as early-access
+      drafts pending real legal review
 
 ## Phase 3: Scale (before growing past a handful of customers)
 

@@ -21,6 +21,7 @@ from app.connectors.snowflake_scanner import scan_snowflake_source
 from app.connectors.redshift_scanner import scan_redshift_source
 from app.connectors.s3_scanner import scan_s3_source
 from app.connectors.azure_sql_scanner import scan_azure_sql_source
+from app.connectors.stripe_scanner import scan_stripe_source
 from app.main import app
 
 
@@ -79,6 +80,7 @@ class ScannerRegistryUnitTests(unittest.TestCase):
         self.assertIs(get_scanner("s3"), scan_s3_source)
         self.assertIs(get_scanner("azure_sql"), scan_azure_sql_source)
         self.assertIs(get_scanner("synapse"), scan_azure_sql_source)
+        self.assertIs(get_scanner("stripe"), scan_stripe_source)
 
     def test_lookup_is_case_and_whitespace_insensitive(self):
         self.assertIs(get_scanner("MySQL"), scan_mysql_source)
@@ -98,6 +100,7 @@ class ScannerRegistryUnitTests(unittest.TestCase):
         self.assertIn("redshift", types)
         self.assertIn("s3", types)
         self.assertIn("azure_sql", types)
+        self.assertIn("stripe", types)
 
 
 class ScannerDispatchApiTests(unittest.TestCase):
@@ -213,6 +216,41 @@ class ScannerDispatchApiTests(unittest.TestCase):
         self.assertEqual(len(datasets), 1)
         self.assertEqual(datasets[0]["schema_name"], "my-bucket")
         self.assertEqual(datasets[0]["name"], "orders")
+
+    @patch("app.api.scanner.get_scanner")
+    def test_stripe_source_scans_through_the_dispatch(self, mock_get_scanner):
+        stripe_scan_result = {
+            "datasets": [{
+                "schema_name": "stripe",
+                "table_name": "customers",
+                "columns": [("id", "varchar", "NO"), ("email", "varchar", "YES")],
+                "row_count": 1,
+                "column_stats": {
+                    "id": {"non_null": 1, "distinct": 1},
+                    "email": {"non_null": 1, "distinct": 1},
+                },
+                "column_samples": {"id": ["cus_123"], "email": ["a@b.com"]},
+            }],
+            "foreign_keys": [],
+        }
+        mock_get_scanner.return_value = lambda config: stripe_scan_result
+
+        r = self.client.post("/api/sources", headers=self.headers, json={
+            "name": f"Stripe Source {self._n}",
+            "type": "stripe",
+            "connection_config": {"api_key": "sk_test_abc"},
+        })
+        source_id = r.json()["id"]
+
+        r = self.client.post(f"/api/scanner/{source_id}", headers=self.headers)
+        self.assertEqual(r.status_code, 200, r.text)
+        self.assertEqual(r.json()["datasets_discovered"], 1)
+
+        r = self.client.get("/api/datasets", headers=self.headers)
+        datasets = r.json()
+        self.assertEqual(len(datasets), 1)
+        self.assertEqual(datasets[0]["schema_name"], "stripe")
+        self.assertEqual(datasets[0]["name"], "customers")
 
 
 if __name__ == "__main__":
