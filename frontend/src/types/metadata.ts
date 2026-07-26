@@ -602,3 +602,29 @@ export type MentionItem = {
 export type MentionResponse = {
   results: MentionItem[];
 };
+
+export type QueryLogEntry = {
+  id: string;
+  source: "ask" | "search";
+  query_text: string;
+  matched: boolean;
+  result_count?: number;
+  actor_email?: string;
+  created_at: string;
+};
+
+export type QueryGroup = {
+  query_text: string;
+  count: number;
+  sources: string[];
+  last_asked_at: string;
+};
+
+export type QueryLogReport = {
+  window_days: number;
+  total_queries: number;
+  unanswered_count: number;
+  unanswered_rate: number;
+  top_unanswered: QueryGroup[];
+  top_overall: QueryGroup[];
+};

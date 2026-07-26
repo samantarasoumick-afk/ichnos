@@ -1,8 +1,8 @@
 # Roadmap
 
 Last revised: 2026-07-26. Everything under "Delivered" is built and
-covered by the backend test suite (364 passing tests as of this
-revision) and the frontend's own Jest suite (43 tests) plus
+covered by the backend test suite (371 passing tests as of this
+revision) and the frontend's own Jest suite (47 tests) plus
 typecheck/lint. Everything under Phases 1-3 is
 what stands between here and a real rollout - see the verdict at the
 end for how to read this list.
@@ -60,7 +60,12 @@ terms, processes, risks, controls, and discussion threads, ranked by
 the same local TF-IDF retrieval the NL Q&A assistant uses - no
 external API call), plus an "@" mention picker on both the search bar
 and the Ask page for referencing a specific entity by exact name
-instead of relying on keyword matching; NL Q&A assistant over the catalog - LLM-backed
+instead of relying on keyword matching; every Ask question and search
+query is logged with a matched/unmatched signal, rolling up into an
+admin-only "Search Insights" report (top unanswered questions ranked
+by frequency, plus overall query volume) so recurring gaps become
+visible candidates for a new built-in intent or glossary entry; NL Q&A
+assistant over the catalog - LLM-backed
 (Anthropic) open-ended, multi-turn answers grounded in real
 catalog/DQ/lineage data when `ANTHROPIC_API_KEY` is set, falling back
 to deterministic keyword-matched intents + TF-IDF semantic retrieval

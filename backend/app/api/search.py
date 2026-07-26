@@ -23,6 +23,7 @@ from app.auth.dependencies import get_current_user
 
 from app.services.catalog_search_service import describe_document
 from app.services.catalog_search_service import semantic_search
+from app.services.query_log_service import log_query_event
 
 
 router = APIRouter(
@@ -80,5 +81,16 @@ def search(
             url=url,
             score=result.score,
         ))
+
+    log_query_event(
+        db,
+        organization_id=current_user.organization_id,
+        source="search",
+        query_text=q,
+        matched=len(results) > 0,
+        actor_user_id=current_user.id,
+        actor_email=current_user.email,
+        result_count=len(results),
+    )
 
     return SearchResponse(results=results)

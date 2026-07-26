@@ -26,6 +26,15 @@ const ADMIN_ITEMS: NavItem[] = [
   { href: "/team", label: "Team" },
 ];
 
+// Unlike the items above, /api/query-log is actually enforced
+// admin-only on the backend (it surfaces the literal text people
+// searched for, not just an activity trail) - so only show the link
+// to users who can actually open it, rather than let non-admins hit a
+// dead end.
+const ADMIN_ONLY_ITEMS: NavItem[] = [
+  { href: "/query-log", label: "Search Insights" },
+];
+
 function NavDropdown({
   label,
   items,
@@ -118,7 +127,11 @@ export default function TopNav() {
 
         <NavDropdown label="Governance" items={GOVERNANCE_ITEMS} pathname={pathname} />
 
-        <NavDropdown label="Admin" items={ADMIN_ITEMS} pathname={pathname} />
+        <NavDropdown
+          label="Admin"
+          items={user?.role === "admin" ? [...ADMIN_ITEMS, ...ADMIN_ONLY_ITEMS] : ADMIN_ITEMS}
+          pathname={pathname}
+        />
       </div>
 
       {user && <GlobalSearch />}

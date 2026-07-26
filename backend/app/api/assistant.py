@@ -13,6 +13,8 @@ from app.schemas.assistant import AskResponse
 
 from app.auth.dependencies import get_current_user
 from app.services.assistant_service import answer_question
+from app.services.query_log_service import classify_ask_answer
+from app.services.query_log_service import log_query_event
 
 
 router = APIRouter(
@@ -41,5 +43,16 @@ def ask(
     history = [{"role": turn.role, "text": turn.text} for turn in payload.history]
 
     result = answer_question(db, current_user.organization_id, payload.query, history=history)
+
+    log_query_event(
+        db,
+        organization_id=current_user.organization_id,
+        source="ask",
+        query_text=payload.query,
+        matched=classify_ask_answer(result.get("answer", "")),
+        actor_user_id=current_user.id,
+        actor_email=current_user.email,
+        result_count=len(result.get("sources", [])),
+    )
 
     return result
