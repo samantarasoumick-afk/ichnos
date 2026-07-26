@@ -117,6 +117,8 @@ export default function TopNav() {
           Data Quality
         </Link>
 
+        <NavDropdown label="Governance" items={GOVERNANCE_ITEMS} pathname={pathname} />
+
         <Link href="/ask" className={linkClasses("/ask")}>
           Ask
         </Link>
@@ -124,8 +126,6 @@ export default function TopNav() {
         <Link href="/discussions" className={linkClasses("/discussions")}>
           Discussions
         </Link>
-
-        <NavDropdown label="Governance" items={GOVERNANCE_ITEMS} pathname={pathname} />
 
         <NavDropdown
           label="Admin"
