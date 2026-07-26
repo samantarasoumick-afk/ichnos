@@ -58,6 +58,18 @@ export default function Home() {
 
   const canManageSources = user?.role !== "viewer";
 
+  // Role-differentiated landing content: the backend has enforced
+  // these roles for a while (RBAC on every mutating endpoint), but
+  // until now everyone landed on the exact same generic catalog page
+  // regardless of role. Admin sees every panel below (admin can act
+  // in every capacity, same convention as require_role() throughout
+  // the backend) - Data Owner and Steward each get the queue that
+  // matches what they're actually here to do, Viewer gets a lighter
+  // page since they can't act on any of it anyway.
+  const isDataOwner = user?.role === "admin" || user?.role === "data_owner";
+  const isSteward = user?.role === "admin" || user?.role === "steward";
+  const isViewerOnly = user?.role === "viewer";
+
   // Not logged in: send the visitor to the full marketing site
   // (frontend/public/site.html) instead of forcing straight to /login -
   // it lives as a static asset on this same origin, so one tunnel/host
@@ -264,6 +276,32 @@ export default function Home() {
     count: datasets.filter((dataset) => dataset.data_category === category).length,
   }));
 
+  // Data Owner queue: datasets with a certification request awaiting
+  // action. pending_certification_request_id already comes back on
+  // the /api/datasets payload, so this needs no extra fetch.
+  const pendingApprovalDatasets = datasets.filter(
+    (dataset) => dataset.pending_certification_request_id
+  );
+
+  // Steward queue: anything a steward should actually go fix -
+  // missing ownership/stewardship/domain/description, or a
+  // governance score low enough to flag. Computed client-side since
+  // there's no "missing X" filter on the backend yet, from data
+  // already on hand.
+  function stewardshipGaps(dataset: Dataset): string[] {
+    const gaps: string[] = [];
+    if (!dataset.owner || dataset.owner.trim() === "") gaps.push("no owner");
+    if (!dataset.steward || dataset.steward.trim() === "") gaps.push("no steward");
+    if (!dataset.domain || dataset.domain.trim() === "") gaps.push("no domain");
+    if (!dataset.description || dataset.description.trim() === "") gaps.push("no description");
+    if ((dataset.governance_score ?? 100) < 60) gaps.push(`score ${dataset.governance_score}`);
+    return gaps;
+  }
+
+  const stewardshipGapDatasets = datasets
+    .map((dataset) => ({ dataset, gaps: stewardshipGaps(dataset) }))
+    .filter(({ gaps }) => gaps.length > 0);
+
   if (authLoading) {
     return (
       <main className="min-h-screen p-10 bg-gray-100">
@@ -366,6 +404,65 @@ export default function Home() {
               {label} · {count}
             </button>
           ))}
+        </div>
+      )}
+
+      {isDataOwner && pendingApprovalDatasets.length > 0 && (
+        <div className="mb-8 rounded-xl border border-blue-200 bg-blue-50 p-5">
+          <div className="mb-3 flex items-center justify-between">
+            <h2 className="text-lg font-semibold text-blue-900">
+              Pending your approval ({pendingApprovalDatasets.length})
+            </h2>
+            <span className="text-xs text-blue-700">Certification requests awaiting a Data Owner</span>
+          </div>
+          <div className="space-y-2">
+            {pendingApprovalDatasets.map((dataset) => (
+              <Link
+                key={dataset.id}
+                href={`/datasets/${dataset.id}`}
+                className="flex items-center justify-between rounded-lg bg-white px-4 py-2.5 text-sm shadow-sm hover:shadow"
+              >
+                <span className="font-medium">
+                  {dataset.schema_name}.{dataset.name}
+                </span>
+                <span className="text-xs text-blue-700">Review certification &rarr;</span>
+              </Link>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {isSteward && stewardshipGapDatasets.length > 0 && (
+        <div className="mb-8 rounded-xl border border-amber-200 bg-amber-50 p-5">
+          <div className="mb-3 flex items-center justify-between">
+            <h2 className="text-lg font-semibold text-amber-900">
+              Stewardship gaps ({stewardshipGapDatasets.length})
+            </h2>
+            <span className="text-xs text-amber-700">
+              Missing ownership, stewardship, domain, description, or a low governance score
+            </span>
+          </div>
+          <div className="max-h-64 space-y-2 overflow-y-auto">
+            {stewardshipGapDatasets.map(({ dataset, gaps }) => (
+              <Link
+                key={dataset.id}
+                href={`/datasets/${dataset.id}`}
+                className="flex items-center justify-between rounded-lg bg-white px-4 py-2.5 text-sm shadow-sm hover:shadow"
+              >
+                <span className="font-medium">
+                  {dataset.schema_name}.{dataset.name}
+                </span>
+                <span className="text-xs text-gray-500">{gaps.join(" · ")}</span>
+              </Link>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {isViewerOnly && (
+        <div className="mb-8 rounded-xl bg-white p-4 text-sm text-gray-600 shadow">
+          Browse the catalog below to find and understand data. Need a new source connected
+          or governance details changed? Ask an editor on your team.
         </div>
       )}
 
