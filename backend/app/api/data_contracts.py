@@ -15,11 +15,13 @@ from app.models.user import User
 from app.schemas.data_contract import DataContractCreate
 from app.schemas.data_contract import DataContractResponse
 from app.schemas.data_contract import DataContractUpdate
+from app.schemas.data_contract import UpstreamContractBreach
 
 from app.auth.dependencies import get_current_user
 from app.auth.dependencies import require_role
 from app.services.audit_service import log_audit_event
 from app.services.data_contract_service import evaluate_contract
+from app.services.data_contract_service import get_upstream_contract_breaches
 
 
 router = APIRouter(
@@ -115,6 +117,27 @@ def list_contracts_for_dataset(
         .order_by(DataContract.version.desc())
         .all()
     )
+
+
+@router.get(
+    "/dataset/{dataset_id}/upstream-breaches",
+    response_model=list[UpstreamContractBreach]
+)
+def list_upstream_contract_breaches(
+    dataset_id: str,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """
+    Any upstream (via lineage) dataset whose ACTIVE contract is
+    currently BREACHED - lets a viewer of this dataset see "something
+    feeding this is broken" even if this dataset has no contract of
+    its own, or its own contract is fine.
+    """
+
+    dataset = get_dataset_or_404(dataset_id, db, current_user)
+
+    return get_upstream_contract_breaches(db, dataset)
 
 
 @router.post(

@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 
 import api from "../services/api";
-import type { ContractColumnExpectation, DataContract } from "../types/metadata";
+import type { ContractColumnExpectation, DataContract, UpstreamContractBreach } from "../types/metadata";
 
 type Props = {
   datasetId: string;
@@ -36,8 +36,11 @@ export default function DataContractPanel({ datasetId, canEdit }: Props) {
 
   const [showForm, setShowForm] = useState(false);
   const [owner, setOwner] = useState("");
+  const [minOverallScore, setMinOverallScore] = useState("");
   const [rows, setRows] = useState<ContractColumnExpectation[]>([{ ...EMPTY_ROW }]);
   const [saving, setSaving] = useState(false);
+
+  const [upstreamBreaches, setUpstreamBreaches] = useState<UpstreamContractBreach[]>([]);
 
   useEffect(() => {
     async function fetchContracts() {
@@ -55,8 +58,20 @@ export default function DataContractPanel({ datasetId, canEdit }: Props) {
       }
     }
 
+    async function fetchUpstreamBreaches() {
+      try {
+        const response = await api.get<UpstreamContractBreach[]>(
+          `/api/data-contracts/dataset/${datasetId}/upstream-breaches`
+        );
+        setUpstreamBreaches(response.data);
+      } catch (error) {
+        console.error(error);
+      }
+    }
+
     if (!datasetId) return;
     fetchContracts();
+    fetchUpstreamBreaches();
   }, [datasetId]);
 
   function updateRow(index: number, field: keyof ContractColumnExpectation, value: string | boolean | undefined) {
@@ -85,8 +100,11 @@ export default function DataContractPanel({ datasetId, canEdit }: Props) {
         required: row.required,
       }));
 
-    if (columns.length === 0) {
-      alert("Add at least one column to the contract");
+    const trimmedScore = minOverallScore.trim();
+    const parsedScore = trimmedScore === "" ? undefined : Number(trimmedScore);
+
+    if (columns.length === 0 && parsedScore === undefined) {
+      alert("Add at least one column expectation or a minimum quality score");
       return;
     }
 
@@ -96,6 +114,8 @@ export default function DataContractPanel({ datasetId, canEdit }: Props) {
         dataset_id: datasetId,
         owner: owner || undefined,
         schema_expectations: { columns },
+        quality_thresholds:
+          parsedScore !== undefined ? { min_overall_score: parsedScore } : undefined,
       });
       window.location.reload();
     } catch (error) {
@@ -140,6 +160,26 @@ export default function DataContractPanel({ datasetId, canEdit }: Props) {
           </button>
         )}
       </div>
+
+      {upstreamBreaches.length > 0 && (
+        <div className="mb-4 rounded-lg border border-amber-300 bg-amber-50 p-3">
+          <div className="text-sm font-semibold text-amber-800">
+            ⚠ {upstreamBreaches.length} upstream dataset{upstreamBreaches.length === 1 ? "" : "s"} with a breached contract
+          </div>
+          <div className="mt-1 text-xs text-amber-700">
+            This dataset&apos;s own contract may be fine, but data feeding into it isn&apos;t:
+          </div>
+          <ul className="mt-2 space-y-1">
+            {upstreamBreaches.map((breach) => (
+              <li key={breach.contract_id} className="text-xs text-amber-800">
+                <span className="font-mono">{breach.schema_name}.{breach.dataset_name}</span>
+                {" "}(contract v{breach.contract_version})
+                {breach.breach_details ? `: ${breach.breach_details}` : ""}
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
 
       {loading && <div className="text-gray-500">Loading contracts...</div>}
 
@@ -195,11 +235,20 @@ export default function DataContractPanel({ datasetId, canEdit }: Props) {
                 <div className="text-sm text-gray-500 mt-2">Owner: {contract.owner}</div>
               )}
 
-              <div className="text-sm text-gray-500 mt-2">
-                {contract.schema_expectations.columns.length} column expectation
-                {contract.schema_expectations.columns.length === 1 ? "" : "s"}:{" "}
-                {contract.schema_expectations.columns.map((c) => c.name).join(", ")}
-              </div>
+              {contract.schema_expectations.columns.length > 0 && (
+                <div className="text-sm text-gray-500 mt-2">
+                  {contract.schema_expectations.columns.length} column expectation
+                  {contract.schema_expectations.columns.length === 1 ? "" : "s"}:{" "}
+                  {contract.schema_expectations.columns.map((c) => c.name).join(", ")}
+                </div>
+              )}
+
+              {contract.quality_thresholds?.min_overall_score !== undefined &&
+                contract.quality_thresholds?.min_overall_score !== null && (
+                  <div className="text-sm text-gray-500 mt-1">
+                    Minimum data quality score: {String(contract.quality_thresholds.min_overall_score)}
+                  </div>
+                )}
 
               {contract.last_status === "BREACHED" && contract.last_breach_details && (
                 <div className="text-sm text-red-700 bg-red-50 border border-red-200 rounded p-2 mt-2">
@@ -213,15 +262,31 @@ export default function DataContractPanel({ datasetId, canEdit }: Props) {
 
       {canEdit && showForm && (
         <div className="border-t pt-4">
-          <div className="mb-4">
-            <label className="text-sm text-gray-500 block mb-1">Owner</label>
-            <input
-              type="text"
-              className="w-full rounded-lg border px-3 py-2 text-sm"
-              placeholder="e.g. Data Platform Team"
-              value={owner}
-              onChange={(event) => setOwner(event.target.value)}
-            />
+          <div className="mb-4 grid grid-cols-2 gap-3">
+            <div>
+              <label className="text-sm text-gray-500 block mb-1">Owner</label>
+              <input
+                type="text"
+                className="w-full rounded-lg border px-3 py-2 text-sm"
+                placeholder="e.g. Data Platform Team"
+                value={owner}
+                onChange={(event) => setOwner(event.target.value)}
+              />
+            </div>
+            <div>
+              <label className="text-sm text-gray-500 block mb-1">
+                Minimum data quality score (optional)
+              </label>
+              <input
+                type="number"
+                min={0}
+                max={100}
+                className="w-full rounded-lg border px-3 py-2 text-sm"
+                placeholder="e.g. 90"
+                value={minOverallScore}
+                onChange={(event) => setMinOverallScore(event.target.value)}
+              />
+            </div>
           </div>
 
           <div className="space-y-2 mb-3">

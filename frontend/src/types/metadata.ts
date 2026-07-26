@@ -387,6 +387,17 @@ export type DataContractCreate = {
   dataset_id: string;
   owner?: string;
   schema_expectations: { columns: ContractColumnExpectation[] };
+  quality_thresholds?: { min_overall_score: number } | null;
+  freshness_sla_hours?: number | null;
+};
+
+export type UpstreamContractBreach = {
+  dataset_id: string;
+  dataset_name: string;
+  schema_name: string;
+  contract_id: string;
+  contract_version: number;
+  breach_details?: string | null;
 };
 
 export type AskSource = {

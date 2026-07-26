@@ -59,3 +59,20 @@ class DataContractResponse(BaseModel):
 
     class Config:
         from_attributes = True
+
+
+class UpstreamContractBreach(BaseModel):
+    """
+    One upstream dataset (reachable via lineage) whose ACTIVE contract
+    is currently BREACHED - surfaced to a downstream dataset so its
+    consumers know a data-quality or schema problem is coming from
+    somewhere further up the pipeline, not necessarily from this
+    dataset itself.
+    """
+
+    dataset_id: UUID
+    dataset_name: str
+    schema_name: str
+    contract_id: UUID
+    contract_version: int
+    breach_details: Optional[str] = None
