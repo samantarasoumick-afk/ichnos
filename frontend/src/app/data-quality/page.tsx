@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 
+import SchemaDatasetSearch from "../../components/SchemaDatasetSearch";
 import TopNav from "../../components/TopNav";
 import { useRequireAuth } from "../../hooks/useRequireAuth";
 import api from "../../services/api";
@@ -49,6 +50,7 @@ export default function DataQualityPage() {
 
   const [search, setSearch] = useState("");
   const [domainFilter, setDomainFilter] = useState("ALL");
+  const [schemaFilter, setSchemaFilter] = useState("ALL");
   const [thresholdFilter, setThresholdFilter] = useState<ThresholdFilter>("ALL");
 
   useEffect(() => {
@@ -104,6 +106,7 @@ export default function DataQualityPage() {
           if (!haystack.includes(needle)) return false;
         }
         if (domainFilter !== "ALL" && row.dataset.domain !== domainFilter) return false;
+        if (schemaFilter !== "ALL" && row.dataset.schema_name !== schemaFilter) return false;
         if (thresholdFilter === "BELOW_80" && !(row.score !== null && row.score < 80)) return false;
         if (thresholdFilter === "BELOW_50" && !(row.score !== null && row.score < 50)) return false;
         if (thresholdFilter === "UNPROFILED" && row.score !== null) return false;
@@ -116,7 +119,7 @@ export default function DataQualityPage() {
         if (b.score === null) return -1;
         return a.score - b.score;
       });
-  }, [rows, search, domainFilter, thresholdFilter]);
+  }, [rows, search, domainFilter, schemaFilter, thresholdFilter]);
 
   const stats = useMemo(() => {
     const profiled = rows.filter((r) => r.score !== null);
@@ -176,12 +179,12 @@ export default function DataQualityPage() {
       </div>
 
       <div className="mb-4 flex flex-wrap items-center gap-3">
-        <input
-          type="text"
-          placeholder="Search datasets..."
-          className="rounded-lg border px-3 py-2 text-sm"
+        <SchemaDatasetSearch
+          datasets={datasets}
           value={search}
-          onChange={(e) => setSearch(e.target.value)}
+          onChange={setSearch}
+          onPickSchema={setSchemaFilter}
+          placeholder="Search datasets..."
         />
         <select
           className="rounded-lg border px-3 py-2 text-sm"
@@ -205,6 +208,16 @@ export default function DataQualityPage() {
           <option value="BELOW_50">Below 50 (worst offenders)</option>
           <option value="UNPROFILED">Unprofiled only</option>
         </select>
+
+        {schemaFilter !== "ALL" && (
+          <button
+            onClick={() => setSchemaFilter("ALL")}
+            className="flex items-center gap-1.5 rounded-full bg-indigo-100 px-3 py-1.5 text-xs font-medium text-indigo-700 hover:bg-indigo-200"
+          >
+            Schema: {schemaFilter}
+            <span aria-hidden>×</span>
+          </button>
+        )}
       </div>
 
       {loading ? (
