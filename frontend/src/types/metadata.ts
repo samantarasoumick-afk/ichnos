@@ -569,3 +569,25 @@ export type RiskDetail = Risk & {
   linked_processes: RiskLinkedProcess[];
   linked_controls: RiskLinkedControl[];
 };
+
+export type SearchResultType =
+  | "dataset"
+  | "glossary_term"
+  | "process"
+  | "risk"
+  | "control"
+  | "discussion_thread";
+
+export type SearchResultItem = {
+  type: SearchResultType;
+  id: string;
+  label: string;
+  subtitle: string;
+  snippet: string;
+  url: string;
+  score: number;
+};
+
+export type SearchResponse = {
+  results: SearchResultItem[];
+};

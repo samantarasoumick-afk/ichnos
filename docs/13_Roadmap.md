@@ -1,8 +1,8 @@
 # Roadmap
 
 Last revised: 2026-07-26. Everything under "Delivered" is built and
-covered by the backend test suite (349 passing tests as of this
-revision) and the frontend's own Jest suite (23 tests) plus
+covered by the backend test suite (356 passing tests as of this
+revision) and the frontend's own Jest suite (30 tests) plus
 typecheck/lint. Everything under Phases 1-3 is
 what stands between here and a real rollout - see the verdict at the
 end for how to read this list.
@@ -53,9 +53,13 @@ mapping, consent tracking, retention policy enforcement, privacy
 dashboard, compliance report export.
 
 **Platform** - multi-tenant org isolation on every query; RBAC
-(admin, steward, data_owner, viewer); JWT auth with login lockout;
-credentials encrypted at rest; NL Q&A assistant over the catalog -
-LLM-backed (Anthropic) open-ended, multi-turn answers grounded in real
+(admin, steward, data_owner, viewer); JWT auth (password, magic-link,
+and GitHub OAuth) with login lockout; credentials encrypted at rest;
+a global cross-entity search bar in the top nav (datasets, glossary
+terms, processes, risks, controls, and discussion threads, ranked by
+the same local TF-IDF retrieval the NL Q&A assistant uses - no
+external API call); NL Q&A assistant over the catalog - LLM-backed
+(Anthropic) open-ended, multi-turn answers grounded in real
 catalog/DQ/lineage data when `ANTHROPIC_API_KEY` is set, falling back
 to deterministic keyword-matched intents + TF-IDF semantic retrieval
 otherwise; team management.

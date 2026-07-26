@@ -6,6 +6,7 @@ import { useEffect, useRef, useState } from "react";
 
 import { useAuth } from "../contexts/AuthContext";
 import { DataFeLogo } from "./DataFeLogo";
+import GlobalSearch from "./GlobalSearch";
 
 type NavItem = {
   href: string;
@@ -119,6 +120,8 @@ export default function TopNav() {
 
         <NavDropdown label="Admin" items={ADMIN_ITEMS} pathname={pathname} />
       </div>
+
+      {user && <GlobalSearch />}
 
       {user && (
         <div className="flex items-center gap-3 text-sm text-gray-600">

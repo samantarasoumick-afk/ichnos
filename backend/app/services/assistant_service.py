@@ -204,7 +204,15 @@ def _build_llm_context(
         directory_text += f"\n... and {remaining} more dataset(s) not shown."
     sections.append("## Full catalog directory\n" + directory_text)
 
-    results = semantic_search(db, organization_id, query, top_k=MAX_RETRIEVED_DETAIL_CARDS)
+    # Scoped to dataset/glossary_term - catalog_search_service's corpus
+    # now also covers processes/risks/controls/discussion threads (for
+    # the global search bar), but the detail-card builders below only
+    # know how to render those first two shapes.
+    results = semantic_search(
+        db, organization_id, query,
+        top_k=MAX_RETRIEVED_DETAIL_CARDS,
+        doc_types=("dataset", "glossary_term"),
+    )
     sources: list[dict] = []
 
     if results:
@@ -515,7 +523,13 @@ def _answer_contract_question(datasets: list[Dataset], normalized_query: str) ->
 
 def _answer_via_semantic_search(db: Session, organization_id: str, query: str) -> dict:
 
-    results = semantic_search(db, organization_id, query, top_k=5)
+    # Same scoping as _build_llm_context above - the snippet logic
+    # right below only knows dataset/glossary_term shapes.
+    results = semantic_search(
+        db, organization_id, query,
+        top_k=5,
+        doc_types=("dataset", "glossary_term"),
+    )
 
     if not results:
         return {

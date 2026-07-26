@@ -1,0 +1,192 @@
+"use client";
+
+import { useEffect, useRef, useState } from "react";
+import { useRouter } from "next/navigation";
+
+import api from "../services/api";
+import type { SearchResponse, SearchResultItem, SearchResultType } from "../types/metadata";
+
+const DEBOUNCE_MS = 250;
+
+const TYPE_LABELS: Record<SearchResultType, string> = {
+  dataset: "Dataset",
+  glossary_term: "Glossary",
+  process: "Process",
+  risk: "Risk",
+  control: "Control",
+  discussion_thread: "Discussion",
+};
+
+const TYPE_BADGE_CLASSES: Record<SearchResultType, string> = {
+  dataset: "bg-blue-100 text-blue-700",
+  glossary_term: "bg-purple-100 text-purple-700",
+  process: "bg-emerald-100 text-emerald-700",
+  risk: "bg-red-100 text-red-700",
+  control: "bg-amber-100 text-amber-700",
+  discussion_thread: "bg-gray-200 text-gray-700",
+};
+
+export default function GlobalSearch() {
+  const router = useRouter();
+  const containerRef = useRef<HTMLDivElement>(null);
+  const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const requestIdRef = useRef(0);
+
+  const [query, setQuery] = useState("");
+  const [results, setResults] = useState<SearchResultItem[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [open, setOpen] = useState(false);
+  const [activeIndex, setActiveIndex] = useState(-1);
+
+  // Close on click outside, same pattern as TopNav's NavDropdown.
+  useEffect(() => {
+    function handleClickOutside(event: MouseEvent) {
+      if (containerRef.current && !containerRef.current.contains(event.target as Node)) {
+        setOpen(false);
+      }
+    }
+
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, []);
+
+  // Cleanup only - the actual debounced fetch is triggered directly
+  // from the input's onChange below, not from an effect reacting to
+  // `query`. Calling setState synchronously inside an effect body
+  // (rather than from an event handler or a callback) causes
+  // cascading renders and trips the react-hooks/set-state-in-effect
+  // rule; triggering the fetch from the change handler itself avoids
+  // that while behaving identically.
+  useEffect(() => {
+    return () => {
+      if (debounceRef.current) clearTimeout(debounceRef.current);
+    };
+  }, []);
+
+  function scheduleSearch(value: string) {
+    if (debounceRef.current) clearTimeout(debounceRef.current);
+
+    const trimmed = value.trim();
+
+    if (!trimmed) {
+      setResults([]);
+      setLoading(false);
+      setActiveIndex(-1);
+      return;
+    }
+
+    setLoading(true);
+
+    debounceRef.current = setTimeout(async () => {
+      // Guards against an earlier, slower request's response landing
+      // after a newer one and clobbering it with stale results.
+      const requestId = ++requestIdRef.current;
+
+      try {
+        const response = await api.get<SearchResponse>("/api/search", {
+          params: { q: trimmed, limit: 8 },
+        });
+
+        if (requestId === requestIdRef.current) {
+          setResults(response.data.results);
+          setActiveIndex(-1);
+        }
+      } catch (error) {
+        console.error(error);
+        if (requestId === requestIdRef.current) {
+          setResults([]);
+        }
+      } finally {
+        if (requestId === requestIdRef.current) {
+          setLoading(false);
+        }
+      }
+    }, DEBOUNCE_MS);
+  }
+
+  function selectResult(result: SearchResultItem) {
+    setOpen(false);
+    setQuery("");
+    setResults([]);
+    router.push(result.url);
+  }
+
+  function handleKeyDown(event: React.KeyboardEvent<HTMLInputElement>) {
+    if (!open || results.length === 0) return;
+
+    if (event.key === "ArrowDown") {
+      event.preventDefault();
+      setActiveIndex((prev) => (prev + 1) % results.length);
+    } else if (event.key === "ArrowUp") {
+      event.preventDefault();
+      setActiveIndex((prev) => (prev <= 0 ? results.length - 1 : prev - 1));
+    } else if (event.key === "Enter") {
+      event.preventDefault();
+      const target = activeIndex >= 0 ? results[activeIndex] : results[0];
+      if (target) selectResult(target);
+    } else if (event.key === "Escape") {
+      setOpen(false);
+    }
+  }
+
+  const showDropdown = open && query.trim().length > 0;
+
+  return (
+    <div className="relative w-64" ref={containerRef}>
+      <input
+        type="text"
+        value={query}
+        onChange={(e) => {
+          const value = e.target.value;
+          setQuery(value);
+          setOpen(true);
+          scheduleSearch(value);
+        }}
+        onFocus={() => setOpen(true)}
+        onKeyDown={handleKeyDown}
+        placeholder="Search everything..."
+        aria-label="Search datasets, glossary, processes, risks, controls, and discussions"
+        className="w-full rounded-lg border px-3 py-1.5 text-sm focus:outline-none focus:ring-1 focus:ring-black"
+      />
+
+      {showDropdown && (
+        <div className="absolute left-0 top-full z-20 mt-1 w-96 max-h-96 overflow-y-auto rounded-lg border bg-white py-1 shadow-lg">
+          {loading && results.length === 0 && (
+            <div className="px-4 py-3 text-sm text-gray-500">Searching...</div>
+          )}
+
+          {!loading && results.length === 0 && (
+            <div className="px-4 py-3 text-sm text-gray-500">
+              No matches for &quot;{query.trim()}&quot;.
+            </div>
+          )}
+
+          {results.map((result, index) => (
+            <button
+              key={`${result.type}-${result.id}`}
+              type="button"
+              onMouseEnter={() => setActiveIndex(index)}
+              onClick={() => selectResult(result)}
+              className={`block w-full px-4 py-2 text-left ${
+                index === activeIndex ? "bg-gray-50" : ""
+              }`}
+            >
+              <div className="flex items-center gap-2">
+                <span
+                  className={`shrink-0 rounded px-1.5 py-0.5 text-[10px] font-medium uppercase ${TYPE_BADGE_CLASSES[result.type]}`}
+                >
+                  {TYPE_LABELS[result.type]}
+                </span>
+                <span className="truncate text-sm font-medium text-gray-900">{result.label}</span>
+              </div>
+              <div className="mt-0.5 truncate text-xs text-gray-500">{result.subtitle}</div>
+              {result.snippet && (
+                <div className="mt-0.5 line-clamp-1 text-xs text-gray-400">{result.snippet}</div>
+              )}
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
