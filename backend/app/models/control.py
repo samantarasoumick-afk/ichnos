@@ -2,6 +2,7 @@ import uuid
 
 from datetime import datetime
 
+from sqlalchemy import Boolean
 from sqlalchemy import Column
 from sqlalchemy import DateTime
 from sqlalchemy import ForeignKey
@@ -67,3 +68,8 @@ class Control(Base):
         default=datetime.utcnow,
         onupdate=datetime.utcnow
     )
+
+    # Same marker used on DataSource/BusinessGlossaryTerm/
+    # BusinessProcess/Risk - lets clear_demo_data() remove exactly the
+    # controls the demo seeder created without touching a real one.
+    is_seed_data = Column(Boolean, default=False, nullable=False)

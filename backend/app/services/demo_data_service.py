@@ -10,9 +10,15 @@ feature rather than scattering unrelated sample rows: PII/financial
 classification, data quality scoring (deliberately varied - some
 tables clean, one deliberately messy), dataset- *and* column-level
 lineage spanning all three layers (including a PCI-style masking
-transformation), one compliant contract and one breached one, all
-three governance-status outcomes (HEALTHY/CRITICAL/REVIEW_REQUIRED),
-the certification approval queue, a governance discussion thread, and
+transformation actually enforced via DatasetColumn.masked, not just
+documented in lineage), one compliant contract and one breached one
+(breached on both a schema check and a DQ-threshold check), all three
+governance-status outcomes (HEALTHY/CRITICAL/REVIEW_REQUIRED), the
+certification approval queue, all three governance discussion types
+(QUESTION/PROPOSAL/ISSUE), a risk register with linked controls, a
+few retention/consent/purpose-filled datasets alongside deliberately
+unassessed ones, a small mixed-role team roster, a handful of logged
+Ask/search queries (including a repeated one that never lands), and
 usage/view tracking.
 
 Deliberately reuses the platform's *real* ingestion pipelines rather
@@ -43,6 +49,7 @@ from sqlalchemy.orm import Session
 from app.models.business_process import BusinessProcess, BusinessProcessLink
 from app.models.column import DatasetColumn
 from app.models.column_lineage import ColumnLineage
+from app.models.control import Control
 from app.models.data_contract import DataContract
 from app.models.data_quality import DataQuality
 from app.models.dataset import Dataset
@@ -52,9 +59,12 @@ from app.models.governance import BusinessGlossaryTerm
 from app.models.glossary_link import GlossaryTermLink
 from app.models.governance_thread import GovernanceThread, GovernanceThreadReply
 from app.models.lineage import DatasetLineage
+from app.models.query_log import QueryLog
+from app.models.risk import Risk, RiskControlLink, RiskDatasetLink, RiskProcessLink
 from app.models.source import DataSource
 from app.models.user import User
 
+from app.auth.security import hash_password
 from app.services.audit_service import log_audit_event
 from app.services.data_contract_service import evaluate_contract
 from app.services.dataset_ingestion_service import ingest_dataset_info
@@ -179,6 +189,90 @@ def _link_process(db: Session, process: BusinessProcess, dataset: Dataset):
             dataset_id=dataset.id,
         )
     )
+
+
+def _team_member(db: Session, organization_id: str, email: str, role: str) -> User:
+    """
+    A real, working account (login-capable, same as one created via
+    the actual team-invite endpoint) rather than a decorative row -
+    so the Team page shows what a mixed-role roster actually looks
+    like, and so risks/controls/discussions below can be owned by
+    someone other than whoever clicked "Load Demo Data." Password is
+    the same fixed demo password across every seeded account, since
+    nobody is meant to keep using it - see the docstring on
+    clear_demo_data for why these are deactivated, not deleted, on
+    clear.
+    """
+
+    member = User(
+        email=email,
+        password_hash=hash_password("password123"),
+        role=role,
+        organization_id=organization_id,
+        is_active=True,
+        is_seed_data=True,
+    )
+    db.add(member)
+    db.flush()
+    return member
+
+
+def _risk(
+    db: Session,
+    organization_id: str,
+    title: str,
+    description: str,
+    category: str,
+    likelihood: str,
+    impact: str,
+    status: str,
+    created_by: str,
+    owner_user_id: str | None = None,
+) -> Risk:
+
+    risk = Risk(
+        organization_id=organization_id,
+        title=title,
+        description=description,
+        category=category,
+        likelihood=likelihood,
+        impact=impact,
+        status=status,
+        owner_user_id=owner_user_id,
+        created_by=created_by,
+        is_seed_data=True,
+    )
+    db.add(risk)
+    db.flush()
+    return risk
+
+
+def _control(
+    db: Session,
+    organization_id: str,
+    name: str,
+    description: str,
+    control_type: str,
+    status: str,
+    created_by: str,
+    owner_user_id: str | None = None,
+    last_tested_at: datetime | None = None,
+) -> Control:
+
+    control = Control(
+        organization_id=organization_id,
+        name=name,
+        description=description,
+        control_type=control_type,
+        status=status,
+        owner_user_id=owner_user_id,
+        last_tested_at=last_tested_at,
+        created_by=created_by,
+        is_seed_data=True,
+    )
+    db.add(control)
+    db.flush()
+    return control
 
 
 def _link(db: Session, upstream: Dataset, downstream: Dataset, transformation_type: str, description: str | None = None):
@@ -541,6 +635,32 @@ def seed_demo_data(db: Session, current_user: User) -> dict:
     tickets.description = None
     tickets.last_scanned_at = datetime.utcnow() - timedelta(days=10)
 
+    # ---------------------------------------------------------------
+    # Privacy: retention, consent, and purpose - filled out on some
+    # datasets and deliberately left at their defaults on others (like
+    # tickets, above), so the Privacy Dashboard and Reference Data
+    # Repository have a real coverage gap to surface rather than
+    # either a uniformly complete or uniformly empty picture.
+    # ---------------------------------------------------------------
+
+    customers.purpose = "Customer relationship management and order fulfillment."
+    customers.consent_status = "CONSENT_OBTAINED"
+    customers.retention_period_days = 1825
+    customers.retention_notes = "Retained for the life of the account plus 3 years for finance record-keeping."
+
+    payments.purpose = "Payment processing and fraud prevention."
+    # Contractual necessity, not marketing consent - reflected here as
+    # "not required" rather than leaving it unassessed, since someone
+    # has actually made that determination for this table.
+    payments.consent_status = "CONSENT_NOT_REQUIRED"
+    payments.retention_period_days = 2555
+    payments.retention_notes = "Retained 7 years to satisfy financial audit and tax requirements."
+
+    leads.purpose = "Sales pipeline development and outreach."
+    leads.consent_status = "CONSENT_OBTAINED"
+    leads.retention_period_days = 730
+    leads.retention_notes = "Reassessed at 2 years - stale leads beyond this point are purged."
+
     db.flush()
 
     # ---------------------------------------------------------------
@@ -675,6 +795,13 @@ def seed_demo_data(db: Session, current_user: User) -> dict:
         "so the raw card number never reaches a report.",
     )
 
+    # The lineage edge above *documents* the masking transformation -
+    # this is what actually turns column masking on for the column,
+    # so the Data Owner masking capability has a real example to show
+    # rather than only a paper trail of it having happened upstream.
+    masked_card_last4 = _get_column(db, fct_customer_orders, "masked_card_last4")
+    masked_card_last4.masked = True
+
     db.flush()
 
     # ---------------------------------------------------------------
@@ -721,6 +848,27 @@ def seed_demo_data(db: Session, current_user: User) -> dict:
     db.flush()
 
     # ---------------------------------------------------------------
+    # Audit log variety - the real ingestion pipelines above don't log
+    # source.create themselves (that's done at the API-route layer for
+    # a live scan/upload, which this seeder bypasses), so without this
+    # the Audit Log page would only ever show two rows: demo.seed and
+    # the payments contract breach. Logged here, once per source, so
+    # the trail has the same shape a series of real connections would.
+    # ---------------------------------------------------------------
+
+    for source in (storefront, salesforce, zendesk, dbt_source, tableau_source):
+        log_audit_event(
+            db,
+            organization_id=organization_id,
+            action="source.create",
+            actor_user_id=current_user.id,
+            actor_email=current_user.email,
+            resource_type="data_source",
+            resource_id=source.id,
+            details=f"Connected source '{source.name}' ({source.type}).",
+        )
+
+    # ---------------------------------------------------------------
     # Data contracts - one compliant, one breached.
     # ---------------------------------------------------------------
 
@@ -749,14 +897,82 @@ def seed_demo_data(db: Session, current_user: User) -> dict:
             {"name": "payment_method", "data_type": "varchar", "required": True, "nullable": False},
             {"name": "refund_status", "data_type": "varchar", "required": True},
         ]},
+        # Stacked with the missing-column violation on purpose - this
+        # contract breaches on both a schema check *and* the DQ
+        # threshold enforcement, so evaluate_contract's quality_thresholds
+        # path (not just schema_expectations) has a real breach to show,
+        # given payments' deliberately messy profiled score below 85.
+        quality_thresholds={"min_overall_score": 85},
         freshness_sla_hours=12,
     )
     db.add(breached_contract)
 
     db.flush()
 
+    log_audit_event(
+        db,
+        organization_id=organization_id,
+        action="contract.create",
+        actor_user_id=current_user.id,
+        actor_email=current_user.email,
+        resource_type="dataset",
+        resource_id=fct_customer_orders.id,
+        details=f"Created data contract v1 for '{fct_customer_orders.schema_name}.{fct_customer_orders.name}'.",
+    )
+    log_audit_event(
+        db,
+        organization_id=organization_id,
+        action="contract.create",
+        actor_user_id=current_user.id,
+        actor_email=current_user.email,
+        resource_type="dataset",
+        resource_id=payments.id,
+        details=f"Created data contract v1 for '{payments.schema_name}.{payments.name}'.",
+    )
+
+    # evaluate_contract() itself logs contract.breach when a contract
+    # comes out BREACHED (see data_contract_service.py) - only the
+    # creation above needs logging explicitly here.
     evaluate_contract(db, fct_customer_orders, actor_user_id=current_user.id, actor_email=current_user.email)
     evaluate_contract(db, payments, actor_user_id=current_user.id, actor_email=current_user.email)
+
+    # ---------------------------------------------------------------
+    # Team roster - a few more accounts with different roles, so the
+    # Team page has a real mixed-role list to show and so the risks,
+    # controls, and discussion threads below can be owned/raised by
+    # someone other than whoever clicked "Load Demo Data." All share
+    # the same fixed demo password; see clear_demo_data for why these
+    # are deactivated, not deleted, when the demo is cleared.
+    # ---------------------------------------------------------------
+
+    # User.email is globally unique (not scoped per organization), so
+    # each org's demo accounts need their own addresses - a short slug
+    # of this org's id keeps them readable while guaranteeing no
+    # collision between two orgs that both load the demo.
+    org_slug = organization_id.replace("-", "")[:8]
+    steward_member = _team_member(
+        db, organization_id, f"priya.sharma+{org_slug}@demo-datafe.example", "steward"
+    )
+    data_owner_member = _team_member(
+        db, organization_id, f"marcus.webb+{org_slug}@demo-datafe.example", "data_owner"
+    )
+    viewer_member = _team_member(
+        db, organization_id, f"jamie.lin+{org_slug}@demo-datafe.example", "viewer"
+    )
+
+    for member, role in (
+        (steward_member, "steward"), (data_owner_member, "data_owner"), (viewer_member, "viewer"),
+    ):
+        log_audit_event(
+            db,
+            organization_id=organization_id,
+            action="user.invite",
+            actor_user_id=current_user.id,
+            actor_email=current_user.email,
+            resource_type="user",
+            resource_id=member.id,
+            details=f"Invited {member.email} as {role}.",
+        )
 
     # ---------------------------------------------------------------
     # Certification queue + a governance discussion tied to the
@@ -771,6 +987,29 @@ def seed_demo_data(db: Session, current_user: User) -> dict:
         created_at=datetime.utcnow(),
     )
     db.add(certification_request)
+
+    log_audit_event(
+        db,
+        organization_id=organization_id,
+        action="certification.request",
+        actor_user_id=current_user.id,
+        actor_email=current_user.email,
+        resource_type="dataset",
+        resource_id=dim_customers.id,
+        details=f"Requested certification for '{dim_customers.schema_name}.{dim_customers.name}'.",
+    )
+
+    for certified in (customers, order_status_codes):
+        log_audit_event(
+            db,
+            organization_id=organization_id,
+            action="governance.certify",
+            actor_user_id=current_user.id,
+            actor_email=current_user.email,
+            resource_type="dataset",
+            resource_id=certified.id,
+            details=f"Certified '{certified.schema_name}.{certified.name}' as VERIFIED.",
+        )
 
     thread = GovernanceThread(
         organization_id=organization_id,
@@ -795,6 +1034,44 @@ def seed_demo_data(db: Session, current_user: User) -> dict:
         created_by=current_user.id,
         created_at=datetime.utcnow() - timedelta(hours=1),
     ))
+
+    # A PROPOSAL thread - the second of the three discussion types,
+    # not tied to a breach, just someone suggesting a change.
+    proposal_thread = GovernanceThread(
+        organization_id=organization_id,
+        dataset_id=dim_customers.id,
+        thread_type="PROPOSAL",
+        title="Proposal: certify dim_customers once the pending request clears",
+        body=(
+            "Now that customers and order_status_codes are both VERIFIED, dim_customers "
+            "is the natural next certification - it's the dimension every exec dashboard "
+            "joins against."
+        ),
+        status="OPEN",
+        created_by=steward_member.id,
+        created_at=datetime.utcnow() - timedelta(days=1, hours=2),
+    )
+    db.add(proposal_thread)
+
+    # An ISSUE thread with a stakeholder explicitly raised_for - the
+    # third discussion type, and the one where that field actually
+    # gets used (see governance_thread.py's docstring on the field).
+    issue_thread = GovernanceThread(
+        organization_id=organization_id,
+        dataset_id=tickets.id,
+        thread_type="ISSUE",
+        title="tickets has no steward and no description",
+        body=(
+            "This dataset carries customer PII (customer_email) but nobody's assigned to "
+            "own it, which is why it's sitting at REVIEW_REQUIRED. Flagging for Customer "
+            "Success to pick up."
+        ),
+        status="OPEN",
+        created_by=data_owner_member.id,
+        raised_for_user_id=steward_member.id,
+        created_at=datetime.utcnow() - timedelta(hours=6),
+    )
+    db.add(issue_thread)
 
     # ---------------------------------------------------------------
     # Usage signal, so the popularity story shows something too.
@@ -892,6 +1169,132 @@ def seed_demo_data(db: Session, current_user: User) -> dict:
     for ds in (tickets, customer_360, support_sla_report):
         _link_process(db, customer_support, ds)
 
+    # ---------------------------------------------------------------
+    # Risk register + control library.
+    # ---------------------------------------------------------------
+
+    card_data_risk = _risk(
+        db, organization_id,
+        "Card data exposure via the payments table",
+        "payments carries a raw card_number column with no assigned steward and a "
+        "breached data contract - exactly the shape of dataset most likely to leak "
+        "sensitive data into a report or export by accident.",
+        category="PRIVACY", likelihood="HIGH", impact="HIGH", status="OPEN",
+        created_by=current_user.id, owner_user_id=steward_member.id,
+    )
+    db.add(RiskDatasetLink(risk_id=card_data_risk.id, dataset_id=payments.id))
+    db.add(RiskProcessLink(risk_id=card_data_risk.id, process_id=order_to_cash.id))
+
+    masking_control = _control(
+        db, organization_id,
+        "PCI masking at the analytics layer",
+        "fct_customer_orders.masked_card_last4 exposes only the last four digits - the "
+        "full card number never reaches the mart or any downstream report.",
+        control_type="PREVENTIVE", status="EFFECTIVE",
+        created_by=current_user.id, owner_user_id=steward_member.id,
+        last_tested_at=datetime.utcnow() - timedelta(days=14),
+    )
+    access_review_control = _control(
+        db, organization_id,
+        "Quarterly access review for the payments schema",
+        "Who has read access to public.payments is reviewed every quarter; overdue for "
+        "this cycle.",
+        control_type="DETECTIVE", status="NOT_TESTED",
+        created_by=current_user.id, owner_user_id=data_owner_member.id,
+    )
+    db.add(RiskControlLink(risk_id=card_data_risk.id, control_id=masking_control.id))
+    db.add(RiskControlLink(risk_id=card_data_risk.id, control_id=access_review_control.id))
+
+    support_pii_risk = _risk(
+        db, organization_id,
+        "Free-text PII in support tickets",
+        "Ticket subjects and bodies sometimes contain customer PII typed in by agents, "
+        "outside of any structured, classified column.",
+        category="PRIVACY", likelihood="MEDIUM", impact="MEDIUM", status="MITIGATED",
+        created_by=current_user.id, owner_user_id=data_owner_member.id,
+    )
+    db.add(RiskDatasetLink(risk_id=support_pii_risk.id, dataset_id=tickets.id))
+    db.add(RiskProcessLink(risk_id=support_pii_risk.id, process_id=customer_support.id))
+
+    redaction_control = _control(
+        db, organization_id,
+        "Support ticket redaction review",
+        "Sampled review of closed tickets for accidentally-included card numbers or SSNs; "
+        "last cycle found gaps in agent training.",
+        control_type="CORRECTIVE", status="INEFFECTIVE",
+        created_by=current_user.id, owner_user_id=data_owner_member.id,
+        last_tested_at=datetime.utcnow() - timedelta(days=45),
+    )
+    db.add(RiskControlLink(risk_id=support_pii_risk.id, control_id=redaction_control.id))
+
+    lead_quality_risk = _risk(
+        db, organization_id,
+        "CRM lead records drifting stale",
+        "leads hasn't been rescanned in over a month and email/company fields are only "
+        "partially populated - low-severity, but worth tracking before it compounds.",
+        category="DATA_QUALITY", likelihood="MEDIUM", impact="LOW", status="ACCEPTED",
+        created_by=current_user.id, owner_user_id=steward_member.id,
+    )
+    db.add(RiskDatasetLink(risk_id=lead_quality_risk.id, dataset_id=leads.id))
+    db.add(RiskProcessLink(risk_id=lead_quality_risk.id, process_id=customer_onboarding.id))
+
+    for risk in (card_data_risk, support_pii_risk, lead_quality_risk):
+        log_audit_event(
+            db,
+            organization_id=organization_id,
+            action="risk.create",
+            actor_user_id=current_user.id,
+            actor_email=current_user.email,
+            resource_type="risk",
+            resource_id=risk.id,
+            details=f"Logged risk '{risk.title}'.",
+        )
+
+    for control in (masking_control, access_review_control, redaction_control):
+        log_audit_event(
+            db,
+            organization_id=organization_id,
+            action="control.create",
+            actor_user_id=current_user.id,
+            actor_email=current_user.email,
+            resource_type="control",
+            resource_id=control.id,
+            details=f"Logged control '{control.name}'.",
+        )
+
+    # ---------------------------------------------------------------
+    # Query log - a handful of realistic Ask/search queries, including
+    # one asked three times that never lands, so the admin "Search
+    # Insights" report has something concrete to surface: a real
+    # candidate for a new intent or glossary entry, not an empty page.
+    # ---------------------------------------------------------------
+
+    now_for_queries = datetime.utcnow()
+    demo_queries = [
+        ("ask", "who owns customers?", True, 1, timedelta(hours=26)),
+        ("ask", "what's downstream of payments?", True, 2, timedelta(hours=20)),
+        ("ask", "which datasets have PII?", True, 4, timedelta(hours=15)),
+        ("ask", "does the shipments dataset have an owner?", False, 0, timedelta(hours=10)),
+        ("ask", "does the shipments dataset have an owner?", False, 0, timedelta(hours=5)),
+        ("ask", "does the shipments dataset have an owner?", False, 0, timedelta(hours=1)),
+        ("search", "payments", True, 3, timedelta(hours=22)),
+        ("search", "customer lifetime value", True, 1, timedelta(hours=18)),
+        ("search", "refund policy", False, 0, timedelta(hours=8)),
+    ]
+    for source, query_text, matched, result_count, ago in demo_queries:
+        db.add(QueryLog(
+            organization_id=organization_id,
+            actor_user_id=current_user.id,
+            actor_email=current_user.email,
+            source=source,
+            query_text=query_text,
+            matched=matched,
+            result_count=result_count,
+            created_at=now_for_queries - ago,
+        ))
+
+    db.flush()
+
     log_audit_event(
         db,
         organization_id=organization_id,
@@ -928,12 +1331,30 @@ def seed_demo_data(db: Session, current_user: User) -> dict:
         )
         .count()
     )
+    risks_created = (
+        db.query(Risk)
+        .filter(Risk.organization_id == organization_id, Risk.is_seed_data.is_(True))
+        .count()
+    )
+    controls_created = (
+        db.query(Control)
+        .filter(Control.organization_id == organization_id, Control.is_seed_data.is_(True))
+        .count()
+    )
+    team_members_created = (
+        db.query(User)
+        .filter(User.organization_id == organization_id, User.is_seed_data.is_(True))
+        .count()
+    )
 
     return {
         "sources_created": sources_created,
         "datasets_created": datasets_created,
         "glossary_terms_created": glossary_terms_created,
         "business_processes_created": business_processes_created,
+        "risks_created": risks_created,
+        "controls_created": controls_created,
+        "team_members_created": team_members_created,
     }
 
 
@@ -944,14 +1365,18 @@ def clear_demo_data(
     actor_email: str | None = None,
 ) -> dict:
     """
-    Deletes everything created by seed_demo_data() for one
-    organization - and nothing else, even if a real source happens to
-    share a name with a demo one, since matching is entirely by the
-    is_seed_data flag rather than by name. Deletes in FK-safe order:
-    everything that references a demo Dataset first, then the
-    datasets themselves, then the sources. AuditLog rows are left in
-    place deliberately - they're an append-only historical record, and
-    "loaded/cleared the demo" is itself worth keeping a trace of.
+    Deletes (or, for team members, deactivates - see below) everything
+    created by seed_demo_data() for one organization - and nothing
+    else, even if a real source happens to share a name with a demo
+    one, since matching is entirely by the is_seed_data flag rather
+    than by name. Deletes in FK-safe order: everything that references
+    a demo Dataset first, then the datasets themselves, then the
+    sources; risks/controls/team members are handled in their own
+    pass afterward since they're org-scoped rather than
+    dataset-scoped, same as glossary terms and business processes.
+    AuditLog and QueryLog rows are left in place deliberately - they're
+    an append-only historical record, and "loaded/cleared the demo" is
+    itself worth keeping a trace of.
     """
 
     seed_sources = (
@@ -964,7 +1389,15 @@ def clear_demo_data(
     )
 
     if not seed_sources:
-        return {"sources_removed": 0, "datasets_removed": 0}
+        return {
+            "sources_removed": 0,
+            "datasets_removed": 0,
+            "glossary_terms_removed": 0,
+            "business_processes_removed": 0,
+            "risks_removed": 0,
+            "controls_removed": 0,
+            "team_members_deactivated": 0,
+        }
 
     source_ids = [s.id for s in seed_sources]
 
@@ -1035,6 +1468,10 @@ def clear_demo_data(
             BusinessProcessLink.dataset_id.in_(dataset_ids)
         ).delete(synchronize_session=False)
 
+        db.query(RiskDatasetLink).filter(
+            RiskDatasetLink.dataset_id.in_(dataset_ids)
+        ).delete(synchronize_session=False)
+
         db.query(DatasetColumn).filter(
             DatasetColumn.dataset_id.in_(dataset_ids)
         ).delete(synchronize_session=False)
@@ -1093,9 +1530,71 @@ def clear_demo_data(
             BusinessProcessLink.process_id.in_(seed_process_ids)
         ).delete(synchronize_session=False)
 
+        db.query(RiskProcessLink).filter(
+            RiskProcessLink.process_id.in_(seed_process_ids)
+        ).delete(synchronize_session=False)
+
         db.query(BusinessProcess).filter(
             BusinessProcess.id.in_(seed_process_ids)
         ).delete(synchronize_session=False)
+
+    # Risks and controls belong to the org, same as glossary terms and
+    # business processes - identified by is_seed_data directly. Their
+    # link tables (to datasets/processes/each other) are removed first
+    # regardless of which side is the demo one, since either a demo
+    # risk could reference a real control (unlikely, but not
+    # impossible) or vice versa.
+    seed_risk_ids = [
+        row[0] for row in (
+            db.query(Risk.id)
+            .filter(Risk.organization_id == organization_id, Risk.is_seed_data.is_(True))
+            .all()
+        )
+    ]
+    seed_control_ids = [
+        row[0] for row in (
+            db.query(Control.id)
+            .filter(Control.organization_id == organization_id, Control.is_seed_data.is_(True))
+            .all()
+        )
+    ]
+    risks_removed = len(seed_risk_ids)
+    controls_removed = len(seed_control_ids)
+
+    if seed_risk_ids or seed_control_ids:
+        db.query(RiskControlLink).filter(
+            RiskControlLink.risk_id.in_(seed_risk_ids)
+            | RiskControlLink.control_id.in_(seed_control_ids)
+        ).delete(synchronize_session=False)
+
+    if seed_risk_ids:
+        db.query(RiskDatasetLink).filter(
+            RiskDatasetLink.risk_id.in_(seed_risk_ids)
+        ).delete(synchronize_session=False)
+
+        db.query(RiskProcessLink).filter(
+            RiskProcessLink.risk_id.in_(seed_risk_ids)
+        ).delete(synchronize_session=False)
+
+        db.query(Risk).filter(Risk.id.in_(seed_risk_ids)).delete(synchronize_session=False)
+
+    if seed_control_ids:
+        db.query(Control).filter(Control.id.in_(seed_control_ids)).delete(synchronize_session=False)
+
+    # Team members the demo created are deactivated, not deleted - the
+    # same "preferred over hard-deleting" reasoning as the User model's
+    # own is_active field: these are real accounts that other rows
+    # (owner_user_id on risks/controls above, raised_for_user_id on the
+    # ISSUE thread, actor_user_id on audit/query log rows) may still
+    # reference, and a real Postgres deployment enforces those foreign
+    # keys - deleting the row out from under them would fail. QueryLog
+    # and AuditLog rows are left in place for the same "append-only
+    # historical record" reason noted below.
+    team_members_deactivated = (
+        db.query(User)
+        .filter(User.organization_id == organization_id, User.is_seed_data.is_(True))
+        .update({User.is_active: False}, synchronize_session=False)
+    )
 
     log_audit_event(
         db,
@@ -1115,4 +1614,7 @@ def clear_demo_data(
         "datasets_removed": datasets_removed,
         "glossary_terms_removed": glossary_terms_removed,
         "business_processes_removed": business_processes_removed,
+        "risks_removed": risks_removed,
+        "controls_removed": controls_removed,
+        "team_members_deactivated": team_members_deactivated,
     }

@@ -38,7 +38,9 @@ export default function DemoDataPanel() {
       alert(
         `Demo data loaded: ${response.data.sources_created} source(s), ` +
           `${response.data.datasets_created} dataset(s) across front office, ` +
-          `processing, and reporting.`
+          `processing, and reporting - plus ${response.data.risks_created} risk(s), ` +
+          `${response.data.controls_created} control(s), and ` +
+          `${response.data.team_members_created} extra team member(s).`
       );
 
       window.location.reload();
@@ -115,10 +117,13 @@ export default function DemoDataPanel() {
           {status.demo_data_loaded
             ? `${status.demo_source_count} demo source(s) loaded - three front-office ` +
               "applications feeding a dbt-modeled warehouse feeding Tableau reporting, " +
-              "with lineage, data quality, contracts, and governance all connected."
+              "with lineage, data quality, contracts, risks & controls, privacy fields, " +
+              "team roles, and search activity all connected."
             : "Load a full, connected sample estate to see every feature working " +
-              "together - front office apps, a processing layer, and reporting, with " +
-              "column-level lineage, data quality, and contracts all in motion."}
+              "together before bringing your own data - front office apps, a " +
+              "processing layer, and reporting, with column-level lineage, data " +
+              "quality, contracts, a risk register, privacy fields, and a mixed-role " +
+              "team roster all in motion."}
         </p>
       </div>
 

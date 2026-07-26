@@ -2,6 +2,7 @@ import uuid
 
 from datetime import datetime
 
+from sqlalchemy import Boolean
 from sqlalchemy import Column
 from sqlalchemy import DateTime
 from sqlalchemy import ForeignKey
@@ -70,6 +71,11 @@ class Risk(Base):
         default=datetime.utcnow,
         onupdate=datetime.utcnow
     )
+
+    # Same marker used on DataSource/BusinessGlossaryTerm/
+    # BusinessProcess - lets clear_demo_data() remove exactly the
+    # risks the demo seeder created without touching a real one.
+    is_seed_data = Column(Boolean, default=False, nullable=False)
 
 
 class RiskDatasetLink(Base):

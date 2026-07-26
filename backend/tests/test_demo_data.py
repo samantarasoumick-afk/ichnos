@@ -534,6 +534,175 @@ class DemoDataTests(unittest.TestCase):
         self.assertEqual(by_name["fct_customer_orders"]["data_category"], "ANALYTICAL")
         self.assertEqual(by_name["Revenue Dashboard"]["data_category"], "ANALYTICAL")
 
+    # -----------------------------------------------------------
+    # Risk register + control library
+    # -----------------------------------------------------------
+
+    def test_seed_creates_risks_linked_to_datasets_processes_and_controls(self):
+        headers = self._register_and_login(f"demo24{self._n}@a.com", f"Demo Org 24 {self._n}")
+        r = self._seed(headers)
+        self.assertEqual(r.json()["risks_created"], 3)
+        self.assertEqual(r.json()["controls_created"], 3)
+
+        r = self.client.get("/api/risks", headers=headers)
+        self.assertEqual(r.status_code, 200, r.text)
+        risks_by_title = {risk["title"]: risk for risk in r.json()}
+        self.assertIn("Card data exposure via the payments table", risks_by_title)
+        card_risk = risks_by_title["Card data exposure via the payments table"]
+        self.assertEqual(card_risk["category"], "PRIVACY")
+        self.assertEqual(card_risk["likelihood"], "HIGH")
+        self.assertEqual(card_risk["status"], "OPEN")
+
+        r = self.client.get(f"/api/risks/{card_risk['id']}", headers=headers)
+        self.assertEqual(r.status_code, 200, r.text)
+        detail = r.json()
+
+        by_name = self._datasets_by_name(headers)
+        linked_dataset_ids = {d["id"] for d in detail["linked_datasets"]}
+        self.assertIn(by_name["payments"]["id"], linked_dataset_ids)
+
+        linked_control_names = {c["name"] for c in detail["linked_controls"]}
+        self.assertIn("PCI masking at the analytics layer", linked_control_names)
+        self.assertIn("Quarterly access review for the payments schema", linked_control_names)
+
+        r = self.client.get("/api/controls", headers=headers)
+        self.assertEqual(r.status_code, 200, r.text)
+        controls_by_name = {control["name"]: control for control in r.json()}
+        self.assertEqual(controls_by_name["PCI masking at the analytics layer"]["status"], "EFFECTIVE")
+        self.assertEqual(controls_by_name["PCI masking at the analytics layer"]["control_type"], "PREVENTIVE")
+
+    def test_seed_masks_the_pci_relevant_column(self):
+        headers = self._register_and_login(f"demo25{self._n}@a.com", f"Demo Org 25 {self._n}")
+        self._seed(headers)
+
+        by_name = self._datasets_by_name(headers)
+        fct_id = by_name["fct_customer_orders"]["id"]
+
+        r = self.client.get(f"/api/columns/dataset/{fct_id}", headers=headers)
+        self.assertEqual(r.status_code, 200, r.text)
+        columns_by_name = {c["name"]: c for c in r.json()}
+        self.assertTrue(columns_by_name["masked_card_last4"]["masked"])
+
+    # -----------------------------------------------------------
+    # Privacy: retention, consent, purpose
+    # -----------------------------------------------------------
+
+    def test_seed_fills_privacy_fields_on_some_datasets_and_leaves_others_unassessed(self):
+        headers = self._register_and_login(f"demo26{self._n}@a.com", f"Demo Org 26 {self._n}")
+        self._seed(headers)
+
+        r = self.client.get("/api/governance/scorecards", headers=headers)
+        self.assertEqual(r.status_code, 200, r.text)
+        by_name = {row["name"]: row for row in r.json()}
+
+        self.assertEqual(by_name["customers"]["consent_status"], "CONSENT_OBTAINED")
+        self.assertEqual(by_name["customers"]["retention_period_days"], 1825)
+
+        self.assertEqual(by_name["payments"]["consent_status"], "CONSENT_NOT_REQUIRED")
+        self.assertEqual(by_name["payments"]["retention_period_days"], 2555)
+
+        # tickets is the deliberate gap - a real coverage story for the
+        # Privacy Dashboard needs at least one dataset that hasn't been
+        # assessed yet.
+        self.assertEqual(by_name["tickets"]["consent_status"], "NOT_ASSESSED")
+        self.assertIsNone(by_name["tickets"]["retention_period_days"])
+
+    # -----------------------------------------------------------
+    # All three discussion thread types
+    # -----------------------------------------------------------
+
+    def test_seed_creates_a_proposal_and_an_issue_thread(self):
+        headers = self._register_and_login(f"demo27{self._n}@a.com", f"Demo Org 27 {self._n}")
+        self._seed(headers)
+
+        r = self.client.get("/api/discussions", headers=headers, params={"thread_type": "PROPOSAL"})
+        self.assertEqual(r.status_code, 200, r.text)
+        self.assertEqual(len(r.json()), 1)
+
+        r = self.client.get("/api/discussions", headers=headers, params={"thread_type": "ISSUE"})
+        self.assertEqual(r.status_code, 200, r.text)
+        issues = r.json()
+        self.assertEqual(len(issues), 1)
+        self.assertIsNotNone(issues[0]["raised_for_user_id"])
+
+        r = self.client.get("/api/discussions", headers=headers, params={"thread_type": "QUESTION"})
+        self.assertEqual(len(r.json()), 1)
+
+    # -----------------------------------------------------------
+    # Team roster
+    # -----------------------------------------------------------
+
+    def test_seed_adds_team_members_with_mixed_roles(self):
+        headers = self._register_and_login(f"demo28{self._n}@a.com", f"Demo Org 28 {self._n}")
+        r = self._seed(headers)
+        self.assertEqual(r.json()["team_members_created"], 3)
+
+        r = self.client.get("/api/users", headers=headers)
+        self.assertEqual(r.status_code, 200, r.text)
+        roles = sorted(member["role"] for member in r.json())
+        # The registering admin plus the three seeded roles.
+        self.assertEqual(roles, ["admin", "data_owner", "steward", "viewer"])
+        self.assertTrue(all(member["is_active"] for member in r.json()))
+
+    def test_clear_deactivates_seeded_team_members_rather_than_deleting_them(self):
+        headers = self._register_and_login(f"demo29{self._n}@a.com", f"Demo Org 29 {self._n}")
+        self._seed(headers)
+
+        r = self.client.get("/api/users", headers=headers)
+        before = {member["email"]: member for member in r.json()}
+        seeded_emails = [email for email in before if "demo-datafe.example" in email]
+        self.assertEqual(len(seeded_emails), 3)
+
+        r = self.client.post("/api/demo/clear", headers=headers)
+        self.assertEqual(r.status_code, 200, r.text)
+        self.assertEqual(r.json()["team_members_deactivated"], 3)
+
+        r = self.client.get("/api/users", headers=headers)
+        after = {member["email"]: member for member in r.json()}
+
+        # Still present (not hard-deleted)...
+        for email in seeded_emails:
+            self.assertIn(email, after)
+            # ...but no longer active.
+            self.assertFalse(after[email]["is_active"])
+
+        # The real admin who ran the seed/clear is untouched.
+        self.assertTrue(after[f"demo29{self._n}@a.com"]["is_active"])
+
+    def test_clear_removes_risks_and_controls(self):
+        headers = self._register_and_login(f"demo30{self._n}@a.com", f"Demo Org 30 {self._n}")
+        self._seed(headers)
+
+        r = self.client.post("/api/demo/clear", headers=headers)
+        self.assertEqual(r.status_code, 200, r.text)
+        self.assertEqual(r.json()["risks_removed"], 3)
+        self.assertEqual(r.json()["controls_removed"], 3)
+
+        r = self.client.get("/api/risks", headers=headers)
+        self.assertEqual(r.json(), [])
+
+        r = self.client.get("/api/controls", headers=headers)
+        self.assertEqual(r.json(), [])
+
+    # -----------------------------------------------------------
+    # Query log
+    # -----------------------------------------------------------
+
+    def test_seed_logs_a_repeated_unanswered_query_for_the_search_insights_report(self):
+        headers = self._register_and_login(f"demo31{self._n}@a.com", f"Demo Org 31 {self._n}")
+        self._seed(headers)
+
+        r = self.client.get("/api/query-log/report", headers=headers)
+        self.assertEqual(r.status_code, 200, r.text)
+        report = r.json()
+
+        self.assertGreaterEqual(report["total_queries"], 9)
+        self.assertGreaterEqual(report["unanswered_count"], 4)
+
+        top = report["top_unanswered"][0]
+        self.assertEqual(top["query_text"], "does the shipments dataset have an owner?")
+        self.assertEqual(top["count"], 3)
+
 
 if __name__ == "__main__":
     unittest.main()

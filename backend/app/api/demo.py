@@ -61,8 +61,9 @@ def seed_demo(
     estate - three front-office applications feeding a dbt-modeled
     warehouse feeding Tableau reporting - so every feature (lineage,
     column-level lineage, data quality, contracts, governance status,
-    certification, discussions) can be seen working together instead
-    of one at a time on hand-picked sample rows. See
+    certification, discussions, risks & controls, privacy fields,
+    team roles, and search/Ask activity) can be seen working together
+    instead of one at a time on hand-picked sample rows. See
     demo_data_service.py for the full narrative.
     """
 

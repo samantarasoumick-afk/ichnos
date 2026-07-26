@@ -88,6 +88,17 @@ class User(Base):
         nullable=False
     )
 
+    # Set on the extra team members the demo seeder creates (so a
+    # prospective org can see what a populated Team page with mixed
+    # roles looks like) - lets clear_demo_data() remove exactly those
+    # accounts without touching anyone who registered or was invited
+    # for real, even if they happen to share a demo account's name.
+    is_seed_data = Column(
+        Boolean,
+        default=False,
+        nullable=False
+    )
+
     organization = relationship(
         "Organization",
         back_populates="users"
