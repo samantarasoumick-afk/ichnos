@@ -4,33 +4,20 @@ import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 
 import api from "../services/api";
-import type { SearchResponse, SearchResultItem, SearchResultType } from "../types/metadata";
+import { useMentionPicker } from "../hooks/useMentionPicker";
+import { ENTITY_TYPE_BADGE_CLASSES, ENTITY_TYPE_LABELS } from "./entityTypeStyles";
+import MentionDropdown from "./MentionDropdown";
+import type { MentionItem, SearchResponse, SearchResultItem } from "../types/metadata";
 
 const DEBOUNCE_MS = 250;
-
-const TYPE_LABELS: Record<SearchResultType, string> = {
-  dataset: "Dataset",
-  glossary_term: "Glossary",
-  process: "Process",
-  risk: "Risk",
-  control: "Control",
-  discussion_thread: "Discussion",
-};
-
-const TYPE_BADGE_CLASSES: Record<SearchResultType, string> = {
-  dataset: "bg-blue-100 text-blue-700",
-  glossary_term: "bg-purple-100 text-purple-700",
-  process: "bg-emerald-100 text-emerald-700",
-  risk: "bg-red-100 text-red-700",
-  control: "bg-amber-100 text-amber-700",
-  discussion_thread: "bg-gray-200 text-gray-700",
-};
 
 export default function GlobalSearch() {
   const router = useRouter();
   const containerRef = useRef<HTMLDivElement>(null);
+  const inputRef = useRef<HTMLInputElement>(null);
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const requestIdRef = useRef(0);
+  const mention = useMentionPicker();
 
   const [query, setQuery] = useState("");
   const [results, setResults] = useState<SearchResultItem[]>([]);
@@ -111,7 +98,31 @@ export default function GlobalSearch() {
     router.push(result.url);
   }
 
+  function selectMention(item: MentionItem) {
+    const el = inputRef.current;
+    const caret = el?.selectionStart ?? query.length;
+    const inserted = mention.buildInsertion(query, caret, item);
+
+    mention.close();
+
+    if (!inserted) return;
+
+    setQuery(inserted.value);
+    // Selecting a mention hands the search bar an exact entity name -
+    // may as well run the normal search with it immediately, so the
+    // dropdown transitions straight into that result (which will rank
+    // first, being an exact label match) instead of sitting empty.
+    scheduleSearch(inserted.value);
+
+    requestAnimationFrame(() => {
+      el?.focus();
+      el?.setSelectionRange(inserted.caret, inserted.caret);
+    });
+  }
+
   function handleKeyDown(event: React.KeyboardEvent<HTMLInputElement>) {
+    if (mention.handleKeyDown(event, selectMention)) return;
+
     if (!open || results.length === 0) return;
 
     if (event.key === "ArrowDown") {
@@ -129,11 +140,12 @@ export default function GlobalSearch() {
     }
   }
 
-  const showDropdown = open && query.trim().length > 0;
+  const showResultsDropdown = !mention.state.open && open && query.trim().length > 0;
 
   return (
     <div className="relative w-64" ref={containerRef}>
       <input
+        ref={inputRef}
         type="text"
         value={query}
         onChange={(e) => {
@@ -141,15 +153,26 @@ export default function GlobalSearch() {
           setQuery(value);
           setOpen(true);
           scheduleSearch(value);
+          mention.onTextChange(value, e.target.selectionStart ?? value.length);
         }}
         onFocus={() => setOpen(true)}
         onKeyDown={handleKeyDown}
-        placeholder="Search everything..."
+        placeholder="Search everything... (type @ to reference something specific)"
         aria-label="Search datasets, glossary, processes, risks, controls, and discussions"
         className="w-full rounded-lg border px-3 py-1.5 text-sm focus:outline-none focus:ring-1 focus:ring-black"
       />
 
-      {showDropdown && (
+      {mention.state.open && (
+        <MentionDropdown
+          suggestions={mention.state.suggestions}
+          activeIndex={mention.state.activeIndex}
+          loading={mention.state.loading}
+          onSelect={selectMention}
+          onHover={() => {}}
+        />
+      )}
+
+      {showResultsDropdown && (
         <div className="absolute left-0 top-full z-20 mt-1 w-96 max-h-96 overflow-y-auto rounded-lg border bg-white py-1 shadow-lg">
           {loading && results.length === 0 && (
             <div className="px-4 py-3 text-sm text-gray-500">Searching...</div>
@@ -173,9 +196,9 @@ export default function GlobalSearch() {
             >
               <div className="flex items-center gap-2">
                 <span
-                  className={`shrink-0 rounded px-1.5 py-0.5 text-[10px] font-medium uppercase ${TYPE_BADGE_CLASSES[result.type]}`}
+                  className={`shrink-0 rounded px-1.5 py-0.5 text-[10px] font-medium uppercase ${ENTITY_TYPE_BADGE_CLASSES[result.type]}`}
                 >
-                  {TYPE_LABELS[result.type]}
+                  {ENTITY_TYPE_LABELS[result.type]}
                 </span>
                 <span className="truncate text-sm font-medium text-gray-900">{result.label}</span>
               </div>

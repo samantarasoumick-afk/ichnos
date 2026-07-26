@@ -591,3 +591,14 @@ export type SearchResultItem = {
 export type SearchResponse = {
   results: SearchResultItem[];
 };
+
+export type MentionItem = {
+  type: SearchResultType;
+  id: string;
+  label: string;
+  subtitle: string;
+};
+
+export type MentionResponse = {
+  results: MentionItem[];
+};

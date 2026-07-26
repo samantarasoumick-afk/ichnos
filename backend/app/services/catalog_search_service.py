@@ -268,3 +268,88 @@ def semantic_search(
         for doc, score in ranked[:top_k]
         if score > 0
     ]
+
+
+def describe_document(document: CorpusDocument) -> tuple[str, str]:
+    """
+    A short type-specific subtitle plus the frontend route a result
+    should link to - shared by the global search bar
+    (app/api/search.py) and the "@" mention picker (app/api/mentions.py)
+    so the two don't drift on how a given entity type is labeled or
+    routed to.
+    """
+
+    ref = document.ref
+
+    if document.doc_type == "dataset":
+        return ref.schema_name, f"/datasets/{document.id}"
+
+    if document.doc_type == "glossary_term":
+        subtitle = "Glossary term"
+        if ref.domain:
+            subtitle += f" · {ref.domain}"
+        return subtitle, "/glossary"
+
+    if document.doc_type == "process":
+        subtitle = "Process"
+        if ref.owner:
+            subtitle += f" · {ref.owner}"
+        return subtitle, "/processes"
+
+    if document.doc_type == "risk":
+        return f"Risk · {ref.category} · {ref.status}", "/risks"
+
+    if document.doc_type == "control":
+        return f"Control · {ref.control_type} · {ref.status}", "/risks"
+
+    if document.doc_type == "discussion_thread":
+        return f"{ref.thread_type.title()} · {ref.status}", f"/discussions/{document.id}"
+
+    # Shouldn't happen - every doc_type build_corpus() can produce is
+    # handled above - but fail soft with a link to nowhere useful
+    # rather than a 500 if a new doc_type is ever added here without
+    # updating this function.
+    return document.doc_type, "/"
+
+
+def list_mentionable(
+    db: Session,
+    organization_id: str,
+    query: str = "",
+    limit: int = 8,
+) -> list[CorpusDocument]:
+    """
+    Powers the "@" mention picker in Ask and the global search bar -
+    a different job from semantic_search() above. That's relevance
+    ranking over free-form question/search text via TF-IDF, which
+    needs whole, complete words to find term overlap with. This is
+    name-prefix autocomplete: someone has typed "@cust" and expects
+    "customers" to show up immediately, which TF-IDF can't do (a
+    partial token like "cust" shares no vocabulary with the indexed
+    word "customers"). Plain case-insensitive substring matching on
+    the label instead, with results starting with the query ranked
+    above results merely containing it, then alphabetically.
+
+    An empty query (just typed "@" with nothing after it yet) returns
+    the first `limit` documents alphabetically by label, across all
+    types, as a reasonable starting list rather than nothing at all.
+    """
+
+    corpus = build_corpus(db, organization_id)
+
+    normalized_query = query.strip().lower()
+
+    if not normalized_query:
+        ranked = sorted(corpus, key=lambda doc: doc.label.lower())
+        return ranked[:limit]
+
+    matches = [doc for doc in corpus if normalized_query in doc.label.lower()]
+
+    matches.sort(
+        key=lambda doc: (
+            not doc.label.lower().startswith(normalized_query),
+            doc.label.lower(),
+        )
+    )
+
+    return matches[:limit]

@@ -3,10 +3,12 @@
 import Link from "next/link";
 import { useRef, useState } from "react";
 
+import MentionDropdown from "../../components/MentionDropdown";
 import TopNav from "../../components/TopNav";
+import { useMentionPicker } from "../../hooks/useMentionPicker";
 import { useRequireAuth } from "../../hooks/useRequireAuth";
 import api from "../../services/api";
-import type { AskResponse, AskSource } from "../../types/metadata";
+import type { AskResponse, AskSource, MentionItem } from "../../types/metadata";
 
 type ConversationEntry = {
   id: string;
@@ -38,6 +40,25 @@ export default function AskPage() {
   const [asking, setAsking] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const nextEntryId = useRef(0);
+  const questionInputRef = useRef<HTMLInputElement>(null);
+  const mention = useMentionPicker();
+
+  function selectMention(item: MentionItem) {
+    const el = questionInputRef.current;
+    const caret = el?.selectionStart ?? question.length;
+    const inserted = mention.buildInsertion(question, caret, item);
+
+    mention.close();
+
+    if (!inserted) return;
+
+    setQuestion(inserted.value);
+
+    requestAnimationFrame(() => {
+      el?.focus();
+      el?.setSelectionRange(inserted.caret, inserted.caret);
+    });
+  }
 
   function newEntryId() {
     nextEntryId.current += 1;
@@ -215,18 +236,37 @@ export default function AskPage() {
         </div>
 
         <div className="border-t p-4 flex items-center gap-3">
-          <input
-            type="text"
-            placeholder="Ask about your catalog..."
-            className="flex-1 rounded-lg border px-3 py-2 text-sm"
-            value={question}
-            onChange={(event) => setQuestion(event.target.value)}
-            onKeyDown={(event) => {
-              if (event.key === "Enter") {
-                submitQuestion(question);
-              }
-            }}
-          />
+          <div className="relative flex-1">
+            <input
+              ref={questionInputRef}
+              type="text"
+              placeholder="Ask about your catalog... (type @ to reference something specific)"
+              className="w-full rounded-lg border px-3 py-2 text-sm"
+              value={question}
+              onChange={(event) => {
+                const value = event.target.value;
+                setQuestion(value);
+                mention.onTextChange(value, event.target.selectionStart ?? value.length);
+              }}
+              onKeyDown={(event) => {
+                if (mention.handleKeyDown(event, selectMention)) return;
+
+                if (event.key === "Enter") {
+                  submitQuestion(question);
+                }
+              }}
+            />
+
+            {mention.state.open && (
+              <MentionDropdown
+                suggestions={mention.state.suggestions}
+                activeIndex={mention.state.activeIndex}
+                loading={mention.state.loading}
+                onSelect={selectMention}
+                onHover={() => {}}
+              />
+            )}
+          </div>
           <button
             onClick={() => submitQuestion(question)}
             disabled={asking || !question.trim()}

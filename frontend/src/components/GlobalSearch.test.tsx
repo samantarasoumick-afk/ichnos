@@ -15,6 +15,15 @@ jest.mock("../services/api", () => ({
 
 const mockedGet = api.get as jest.Mock;
 
+function getSearchInput() {
+  return screen.getByPlaceholderText(/Search everything/);
+}
+
+const MENTION_RESULTS = [
+  { type: "dataset", id: "d1", label: "public.customers", subtitle: "public" },
+  { type: "glossary_term", id: "g1", label: "Customer Lifetime Value", subtitle: "Glossary term" },
+];
+
 const RESULTS = [
   {
     type: "dataset",
@@ -51,7 +60,7 @@ describe("GlobalSearch", () => {
     mockedGet.mockResolvedValue({ data: { results: RESULTS } });
 
     render(<GlobalSearch />);
-    const input = screen.getByPlaceholderText("Search everything...");
+    const input = getSearchInput();
 
     fireEvent.change(input, { target: { value: "customers" } });
 
@@ -72,7 +81,7 @@ describe("GlobalSearch", () => {
 
   it("clears results immediately when the input is emptied, without calling the API", () => {
     render(<GlobalSearch />);
-    const input = screen.getByPlaceholderText("Search everything...");
+    const input = getSearchInput();
 
     fireEvent.change(input, { target: { value: "abc" } });
     fireEvent.change(input, { target: { value: "" } });
@@ -85,7 +94,7 @@ describe("GlobalSearch", () => {
     mockedGet.mockResolvedValue({ data: { results: RESULTS } });
 
     render(<GlobalSearch />);
-    const input = screen.getByPlaceholderText("Search everything...");
+    const input = getSearchInput();
     fireEvent.change(input, { target: { value: "customers" } });
 
     const item = await screen.findByText("public.customers");
@@ -98,7 +107,7 @@ describe("GlobalSearch", () => {
     mockedGet.mockResolvedValue({ data: { results: RESULTS } });
 
     render(<GlobalSearch />);
-    const input = screen.getByPlaceholderText("Search everything...");
+    const input = getSearchInput();
     fireEvent.change(input, { target: { value: "customers" } });
 
     await screen.findByText("public.customers");
@@ -114,7 +123,7 @@ describe("GlobalSearch", () => {
     mockedGet.mockResolvedValue({ data: { results: [] } });
 
     render(<GlobalSearch />);
-    const input = screen.getByPlaceholderText("Search everything...");
+    const input = getSearchInput();
     fireEvent.change(input, { target: { value: "zzz" } });
 
     expect(await screen.findByText(/No matches for/)).toBeInTheDocument();
@@ -129,7 +138,7 @@ describe("GlobalSearch", () => {
         <GlobalSearch />
       </div>
     );
-    const input = screen.getByPlaceholderText("Search everything...");
+    const input = getSearchInput();
     fireEvent.change(input, { target: { value: "customers" } });
 
     await screen.findByText("public.customers");
@@ -139,5 +148,40 @@ describe("GlobalSearch", () => {
     });
 
     expect(screen.queryByText("public.customers")).not.toBeInTheDocument();
+  });
+
+  it("shows the mention dropdown when typing @, fetching from /api/mentions", async () => {
+    mockedGet.mockResolvedValue({ data: { results: MENTION_RESULTS } });
+
+    render(<GlobalSearch />);
+    const input = getSearchInput();
+
+    // Setting .value via fireEvent leaves the caret at the end of the
+    // string by default, which is exactly where it'd be after typing.
+    fireEvent.change(input, { target: { value: "revenue is @cust" } });
+
+    await waitFor(() =>
+      expect(mockedGet).toHaveBeenCalledWith(
+        "/api/mentions",
+        expect.objectContaining({ params: { q: "cust", limit: 8 } })
+      )
+    );
+
+    expect(await screen.findByText("public.customers")).toBeInTheDocument();
+    expect(screen.getByText("Customer Lifetime Value")).toBeInTheDocument();
+  });
+
+  it("inserts the selected mention's exact label into the query on click", async () => {
+    mockedGet.mockResolvedValue({ data: { results: MENTION_RESULTS } });
+
+    render(<GlobalSearch />);
+    const input = getSearchInput() as HTMLInputElement;
+
+    fireEvent.change(input, { target: { value: "@cust" } });
+
+    const item = await screen.findByText("public.customers");
+    fireEvent.click(item);
+
+    expect(input.value).toBe("@public.customers ");
   });
 });

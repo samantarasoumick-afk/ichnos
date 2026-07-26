@@ -75,6 +75,7 @@ from app.api.business_processes import router as business_processes_router
 from app.api.risks import router as risks_router
 from app.api.controls import router as controls_router
 from app.api.search import router as search_router
+from app.api.mentions import router as mentions_router
 from app.api.columns import (
     router as columns_router
 )
@@ -199,6 +200,7 @@ app.include_router(business_processes_router)
 app.include_router(risks_router)
 app.include_router(controls_router)
 app.include_router(search_router)
+app.include_router(mentions_router)
 
 # CORS_ALLOWED_ORIGINS is a comma-separated list of exact origins,
 # e.g. "https://app.example.com,http://localhost:3000". Wildcard

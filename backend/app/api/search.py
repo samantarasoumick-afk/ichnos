@@ -21,6 +21,7 @@ from app.schemas.search import SearchResultItem
 
 from app.auth.dependencies import get_current_user
 
+from app.services.catalog_search_service import describe_document
 from app.services.catalog_search_service import semantic_search
 
 
@@ -52,41 +53,6 @@ def _snippet(text: str, label: str) -> str:
     return remainder[:SNIPPET_MAX_LENGTH].rsplit(" ", 1)[0] + "..."
 
 
-def _subtitle_and_url(document) -> tuple[str, str]:
-
-    ref = document.ref
-
-    if document.doc_type == "dataset":
-        return ref.schema_name, f"/datasets/{document.id}"
-
-    if document.doc_type == "glossary_term":
-        subtitle = "Glossary term"
-        if ref.domain:
-            subtitle += f" · {ref.domain}"
-        return subtitle, "/glossary"
-
-    if document.doc_type == "process":
-        subtitle = "Process"
-        if ref.owner:
-            subtitle += f" · {ref.owner}"
-        return subtitle, "/processes"
-
-    if document.doc_type == "risk":
-        return f"Risk · {ref.category} · {ref.status}", "/risks"
-
-    if document.doc_type == "control":
-        return f"Control · {ref.control_type} · {ref.status}", "/risks"
-
-    if document.doc_type == "discussion_thread":
-        return f"{ref.thread_type.title()} · {ref.status}", f"/discussions/{document.id}"
-
-    # Shouldn't happen - every doc_type build_corpus() can produce is
-    # handled above - but fail soft with a link to nowhere useful
-    # rather than a 500 if a new doc_type is ever added here without
-    # updating this function.
-    return document.doc_type, "/"
-
-
 @router.get("", response_model=SearchResponse)
 def search(
     q: str = Query(default="", description="Search text"),
@@ -103,7 +69,7 @@ def search(
     results = []
 
     for result in ranked:
-        subtitle, url = _subtitle_and_url(result.document)
+        subtitle, url = describe_document(result.document)
 
         results.append(SearchResultItem(
             type=result.document.doc_type,
