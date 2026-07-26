@@ -18,6 +18,7 @@ import type {
   Source
 } from "../types/metadata";
 import { getOverallHealth, HEALTH_STYLES } from "../utils/datasetHealth";
+import { stewardshipGaps } from "../utils/stewardshipGaps";
 
 function isOperationalAlert(dataset: Dataset) {
   return (
@@ -287,17 +288,8 @@ export default function Home() {
   // missing ownership/stewardship/domain/description, or a
   // governance score low enough to flag. Computed client-side since
   // there's no "missing X" filter on the backend yet, from data
-  // already on hand.
-  function stewardshipGaps(dataset: Dataset): string[] {
-    const gaps: string[] = [];
-    if (!dataset.owner || dataset.owner.trim() === "") gaps.push("no owner");
-    if (!dataset.steward || dataset.steward.trim() === "") gaps.push("no steward");
-    if (!dataset.domain || dataset.domain.trim() === "") gaps.push("no domain");
-    if (!dataset.description || dataset.description.trim() === "") gaps.push("no description");
-    if ((dataset.governance_score ?? 100) < 60) gaps.push(`score ${dataset.governance_score}`);
-    return gaps;
-  }
-
+  // already on hand. Gap-detection logic lives in
+  // utils/stewardshipGaps.ts so it's unit-testable on its own.
   const stewardshipGapDatasets = datasets
     .map((dataset) => ({ dataset, gaps: stewardshipGaps(dataset) }))
     .filter(({ gaps }) => gaps.length > 0);
