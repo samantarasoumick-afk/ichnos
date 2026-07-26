@@ -47,8 +47,8 @@ Once the GitHub repo exists (see the git/CI setup you already have),
 clone it:
 
 ```
-git clone https://github.com/<your-org-or-username>/ichnos.git
-cd ichnos
+git clone https://github.com/<your-org-or-username>/datafe.git
+cd datafe
 ```
 
 ## 3. Configure secrets
@@ -128,35 +128,35 @@ cheap one bought just for this) - gives you both hostnames:**
 
 1. `cloudflared tunnel login` - opens a browser, log into (or create)
    your Cloudflare account and pick the domain.
-2. `cloudflared tunnel create ichnos`
+2. `cloudflared tunnel create datafe`
 3. Create a config file (e.g. `C:\Users\<you>\.cloudflared\config.yml`).
    Both hostnames point at the same local port - the `website`
    container (nginx) reads the `Host` header and routes the marketing
    site vs. the app accordingly:
    ```yaml
-   tunnel: ichnos
+   tunnel: datafe
    credentials-file: C:\Users\<you>\.cloudflared\<tunnel-id>.json
    ingress:
-     - hostname: ichnos.yourdomain.com
+     - hostname: datafe.yourdomain.com
        service: http://localhost:80
-     - hostname: app.ichnos.yourdomain.com
+     - hostname: app.datafe.yourdomain.com
        service: http://localhost:80
      - service: http_status:404
    ```
-4. `cloudflared tunnel route dns ichnos ichnos.yourdomain.com` and
-   `cloudflared tunnel route dns ichnos app.ichnos.yourdomain.com`.
+4. `cloudflared tunnel route dns datafe datafe.yourdomain.com` and
+   `cloudflared tunnel route dns datafe app.datafe.yourdomain.com`.
 5. Run it as a Windows service so it survives reboots:
    `cloudflared service install`, then `net start cloudflared` (or
-   just leave `cloudflared tunnel run ichnos` running in a terminal
+   just leave `cloudflared tunnel run datafe` running in a terminal
    window for casual testing).
 6. Testers now see the marketing site at
-   `https://ichnos.yourdomain.com` and reach the app at
-   `https://app.ichnos.yourdomain.com`.
+   `https://datafe.yourdomain.com` and reach the app at
+   `https://app.datafe.yourdomain.com`.
 
 Either way, once you know the app's public hostname, update `.env`:
 
 ```
-CORS_ALLOWED_ORIGINS=https://app.ichnos.yourdomain.com
+CORS_ALLOWED_ORIGINS=https://app.datafe.yourdomain.com
 ```
 
 and restart: `docker compose up -d`.
@@ -177,7 +177,7 @@ and restart: `docker compose up -d`.
   (a cloud storage folder, an external drive, anywhere else). Example
   dump command:
   ```
-  docker exec ichnos_postgres pg_dump -U ichnos ichnos > backup_%date%.sql
+  docker exec datafe_postgres pg_dump -U datafe datafe > backup_%date%.sql
   ```
 - **Monitoring**: nothing fancy needed yet - a free uptime checker
   (e.g. UptimeRobot) pinging your tunnel URL every few minutes will

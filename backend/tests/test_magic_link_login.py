@@ -3,7 +3,7 @@ Passwordless "magic link" login: /api/auth/magic-link/request always
 returns the same generic message (so it can't be used to enumerate
 which emails have accounts), and /api/auth/magic-link/verify exchanges
 a valid, unused, unexpired token for a normal access token - the same
-token type /api/auth/login issues. This is also Ichnos's de facto
+token type /api/auth/login issues. This is also DataFe's de facto
 password-reset path: there's no separate "reset my password" flow,
 since anyone who can receive mail at the account's address can always
 get back in this way.

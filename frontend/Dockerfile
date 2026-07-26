@@ -1,6 +1,6 @@
-# Ichnos frontend (Next.js).
+# DataFe frontend (Next.js).
 #
-# Build: docker build -t ichnos-frontend ./frontend
+# Build: docker build -t datafe-frontend ./frontend
 # Run:   see docker-compose.yml at the repo root - this image expects
 #        BACKEND_INTERNAL_URL at runtime (where the Next.js server
 #        proxies /backend/* requests to the FastAPI backend).

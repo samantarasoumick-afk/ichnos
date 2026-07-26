@@ -6,7 +6,7 @@ import type { Metadata } from "next";
 import { AuthProvider } from "../contexts/AuthContext";
 
 export const metadata: Metadata = {
-  title: "Ichnos",
+  title: "DataFe",
   description: "Metadata intelligence and governance platform",
 };
 

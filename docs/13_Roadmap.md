@@ -101,7 +101,7 @@ customers.
 ## Phase 2: Product completion (before charging money)
 
 - [ ] Billing/subscription enforcement - the pricing strategy doc
-      (`docs/Ichnos_Pricing_Strategy.docx`) describes tiers, but
+      (`docs/DataFe_Pricing_Strategy.docx`) describes tiers, but
       nothing in the app meters or enforces them yet
 - [ ] Masking capability for sensitive columns - the platform already
       classifies PII/FINANCIAL columns but the Data Owner role is

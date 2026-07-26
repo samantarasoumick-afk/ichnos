@@ -59,13 +59,13 @@ export default function AskPage() {
       return `${speaker}: ${entry.text}${sourceLines}`;
     });
 
-    const header = `Ichnos - Ask conversation\nExported ${new Date().toLocaleString()}\n\n`;
+    const header = `DataFe - Ask conversation\nExported ${new Date().toLocaleString()}\n\n`;
     const blob = new Blob([header + lines.join("\n\n")], { type: "text/plain" });
     const url = URL.createObjectURL(blob);
 
     const link = document.createElement("a");
     link.href = url;
-    link.download = `ichnos-ask-${new Date().toISOString().slice(0, 10)}.txt`;
+    link.download = `datafe-ask-${new Date().toISOString().slice(0, 10)}.txt`;
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);

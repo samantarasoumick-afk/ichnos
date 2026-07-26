@@ -43,7 +43,7 @@ router = APIRouter(
 # Where the frontend actually lives, for building the link in the
 # magic-link email. Defaults to local dev; self-hosted setups should
 # set this to the app's real public URL (e.g.
-# https://app.ichnos.yourdomain.com) once one exists - see
+# https://app.datafe.yourdomain.com) once one exists - see
 # docs/SELF_HOSTING.md.
 FRONTEND_URL = os.getenv("FRONTEND_URL", "http://localhost:3000").rstrip("/")
 
@@ -296,9 +296,9 @@ def request_magic_link(
 
     send_email(
         to=existing_user.email,
-        subject="Your Ichnos login link",
+        subject="Your DataFe login link",
         body=(
-            "Click the link below to sign in to Ichnos. It expires in "
+            "Click the link below to sign in to DataFe. It expires in "
             f"{MAGIC_LINK_EXPIRE_MINUTES} minutes and can only be used once.\n\n"
             f"{login_url}\n\n"
             "If you didn't request this, you can safely ignore this email - "

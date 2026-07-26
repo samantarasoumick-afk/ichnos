@@ -1,12 +1,13 @@
-// Ichnos (from Greek ίχνος - "trace" / "footprint" / "track") - the
-// mark is a beacon/signal: two arcs broadcasting outward from a point,
-// tracing down into a grounded stem, matching the idea of tracing
-// data's footprint - and picking up its trail - across systems
-// (lineage, classification, ownership). Same mark used on the
-// marketing site (website/index.html) - kept in sync so the app and
-// the site show one logo, not two.
+// DataFe - "fe" (Spanish/Portuguese for "faith") + Data: have faith in
+// your data. The mark is a beacon/signal: two arcs broadcasting
+// outward from a point, tracing down into a grounded stem - the same
+// idea of tracing data's footprint and picking up its trail across
+// systems (lineage, classification, ownership) that the mark was
+// originally built around. Same mark used on the marketing site
+// (website/index.html) - kept in sync so the app and the site show
+// one logo, not two.
 
-export function IchnosMark({ size = 28 }: { size?: number }) {
+export function DataFeMark({ size = 28 }: { size?: number }) {
   return (
     <svg
       width={size}
@@ -39,7 +40,7 @@ export function IchnosMark({ size = 28 }: { size?: number }) {
   );
 }
 
-export function IchnosLogo({
+export function DataFeLogo({
   size = 28,
   textClassName = "font-semibold",
 }: {
@@ -48,8 +49,8 @@ export function IchnosLogo({
 }) {
   return (
     <span className="inline-flex items-center gap-2">
-      <IchnosMark size={size} />
-      <span className={textClassName}>Ichnos</span>
+      <DataFeMark size={size} />
+      <span className={textClassName}>DataFe</span>
     </span>
   );
 }

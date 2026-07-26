@@ -25,7 +25,7 @@ from app.db.session import get_db
 from app.middleware.rate_limit import RateLimitMiddleware
 from app.middleware.request_id import RequestIdMiddleware
 
-logger = logging.getLogger("ichnos.app")
+logger = logging.getLogger("datafe.app")
 
 from app.models.organization import Organization
 from app.models.user import User
@@ -169,7 +169,7 @@ if os.getenv("DEMO_SEED", "false").lower() == "true":
     seed_demo_data()
 
 app = FastAPI(
-    title="Ichnos",
+    title="DataFe",
     version="0.2.0"
 )
 

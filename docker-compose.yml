@@ -1,5 +1,5 @@
 # Self-hosted full stack: Postgres + FastAPI backend + Next.js frontend
-# + the ichnos marketing website (nginx), which is the public front
+# + the datafe marketing website (nginx), which is the public front
 # door and reverse-proxies the app itself on an "app." subdomain.
 #
 # First time setup:
@@ -20,16 +20,16 @@ services:
 
   postgres:
     image: postgres:15
-    container_name: ichnos_postgres
+    container_name: datafe_postgres
     restart: unless-stopped
     environment:
-      POSTGRES_USER: ${POSTGRES_USER:-ichnos}
+      POSTGRES_USER: ${POSTGRES_USER:-datafe}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in .env}
-      POSTGRES_DB: ${POSTGRES_DB:-ichnos}
+      POSTGRES_DB: ${POSTGRES_DB:-datafe}
     volumes:
       - postgres_data:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-ichnos}"]
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-datafe}"]
       interval: 5s
       timeout: 5s
       retries: 10
@@ -40,13 +40,13 @@ services:
 
   backend:
     build: ./backend
-    container_name: ichnos_backend
+    container_name: datafe_backend
     restart: unless-stopped
     depends_on:
       postgres:
         condition: service_healthy
     environment:
-      DATABASE_URL: postgresql://${POSTGRES_USER:-ichnos}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-ichnos}
+      DATABASE_URL: postgresql://${POSTGRES_USER:-datafe}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-datafe}
       SECRET_KEY: ${SECRET_KEY:?set SECRET_KEY in .env}
       ENCRYPTION_KEY: ${ENCRYPTION_KEY:?set ENCRYPTION_KEY in .env}
       CORS_ALLOWED_ORIGINS: ${CORS_ALLOWED_ORIGINS:-http://app.localhost}
@@ -55,7 +55,7 @@ services:
       SMTP_PORT: ${SMTP_PORT:-587}
       SMTP_USERNAME: ${SMTP_USERNAME:-}
       SMTP_PASSWORD: ${SMTP_PASSWORD:-}
-      SMTP_FROM: ${SMTP_FROM:-Ichnos <no-reply@ichnos.local>}
+      SMTP_FROM: ${SMTP_FROM:-DataFe <no-reply@datafe.local>}
       ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
       ANTHROPIC_MODEL: ${ANTHROPIC_MODEL:-claude-sonnet-5}
       AUTO_CREATE_SCHEMA: "false"
@@ -65,7 +65,7 @@ services:
 
   frontend:
     build: ./frontend
-    container_name: ichnos_frontend
+    container_name: datafe_frontend
     restart: unless-stopped
     depends_on:
       - backend
@@ -78,7 +78,7 @@ services:
 
   website:
     image: nginx:1.27-alpine
-    container_name: ichnos_website
+    container_name: datafe_website
     restart: unless-stopped
     depends_on:
       - frontend

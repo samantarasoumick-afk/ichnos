@@ -5,7 +5,7 @@ import { usePathname } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 
 import { useAuth } from "../contexts/AuthContext";
-import { IchnosLogo } from "./IchnosLogo";
+import { DataFeLogo } from "./DataFeLogo";
 
 type NavItem = {
   href: string;
@@ -96,7 +96,7 @@ export default function TopNav() {
     <div className="mb-6 flex flex-wrap items-center justify-between gap-3 rounded-xl bg-white px-5 py-3 shadow">
       <div className="flex items-center gap-5">
         <Link href="/">
-          <IchnosLogo size={26} />
+          <DataFeLogo size={26} />
         </Link>
 
         <Link href="/lineage" className={linkClasses("/lineage")}>

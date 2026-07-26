@@ -5,13 +5,13 @@ import smtplib
 from email.message import EmailMessage
 
 
-logger = logging.getLogger("ichnos.email")
+logger = logging.getLogger("datafe.email")
 
 SMTP_HOST = os.getenv("SMTP_HOST")
 SMTP_PORT = int(os.getenv("SMTP_PORT", "587"))
 SMTP_USERNAME = os.getenv("SMTP_USERNAME")
 SMTP_PASSWORD = os.getenv("SMTP_PASSWORD")
-SMTP_FROM = os.getenv("SMTP_FROM", "Ichnos <no-reply@ichnos.local>")
+SMTP_FROM = os.getenv("SMTP_FROM", "DataFe <no-reply@datafe.local>")
 
 
 def send_email(to: str, subject: str, body: str) -> None:

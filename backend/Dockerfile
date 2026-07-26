@@ -1,6 +1,6 @@
-# Ichnos backend (FastAPI + SQLAlchemy + Alembic).
+# DataFe backend (FastAPI + SQLAlchemy + Alembic).
 #
-# Build: docker build -t ichnos-backend ./backend
+# Build: docker build -t datafe-backend ./backend
 # Run:   see docker-compose.yml at the repo root - this image expects
 #        DATABASE_URL, SECRET_KEY, ENCRYPTION_KEY, CORS_ALLOWED_ORIGINS
 #        to be provided as environment variables (see .env.example).
