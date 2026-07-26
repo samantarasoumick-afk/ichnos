@@ -161,6 +161,7 @@ export type DatasetColumn = {
   recommendation: string;
   description?: string | null;
   sample_values?: string | null;
+  masked: boolean;
 };
 
 export type Lineage = {

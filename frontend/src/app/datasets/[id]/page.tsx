@@ -66,8 +66,13 @@ export default function DatasetPage() {
   const [expandedColumnId, setExpandedColumnId] = useState<string | null>(null);
   const [columnDescriptionDrafts, setColumnDescriptionDrafts] = useState<Record<string, string>>({});
   const [savingColumnId, setSavingColumnId] = useState<string | null>(null);
+  const [savingMaskColumnId, setSavingMaskColumnId] = useState<string | null>(null);
 
   const canEditGovernance = user?.role === "admin" || user?.role === "steward";
+  // Masking is deliberately narrower than description-editing: it's a
+  // Data Owner/admin control, not a steward one - stewards document
+  // data, Data Owners control who's allowed to see it.
+  const canMaskColumns = user?.role === "admin" || user?.role === "data_owner";
 
   function toggleColumnExpanded(column: DatasetColumn) {
     if (expandedColumnId === column.id) {
@@ -94,6 +99,22 @@ export default function DatasetPage() {
       console.error(error);
     } finally {
       setSavingColumnId(null);
+    }
+  }
+
+  async function handleToggleColumnMasking(column: DatasetColumn) {
+    setSavingMaskColumnId(column.id);
+    try {
+      const response = await api.patch<DatasetColumn>(`/api/columns/${column.id}/masking`, {
+        masked: !column.masked,
+      });
+      setColumns((prev) =>
+        prev.map((c) => (c.id === column.id ? response.data : c))
+      );
+    } catch (error) {
+      console.error(error);
+    } finally {
+      setSavingMaskColumnId(null);
     }
   }
 
@@ -589,6 +610,14 @@ export default function DatasetPage() {
                           >
                             {column.classification}
                           </span>
+                          {column.masked && (
+                            <span
+                              title="Sample values are hidden from Viewers"
+                              className="ml-1.5 rounded-full bg-amber-100 px-2 py-1 text-xs text-amber-800"
+                            >
+                              🔒 Masked
+                            </span>
+                          )}
                         </td>
                         <td className="py-3">{column.sensitivity_score || 0}</td>
                         <td className="py-3 text-right">
@@ -639,8 +668,15 @@ export default function DatasetPage() {
                               </div>
 
                               <div>
-                                <div className="mb-1 text-xs font-semibold text-gray-500">
-                                  Sample Values
+                                <div className="mb-1 flex items-center gap-2">
+                                  <div className="text-xs font-semibold text-gray-500">
+                                    Sample Values
+                                  </div>
+                                  {column.masked && (
+                                    <span className="rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-semibold text-amber-800">
+                                      Masked for Viewers
+                                    </span>
+                                  )}
                                 </div>
                                 {sampleValues.length === 0 ? (
                                   <div className="text-sm text-gray-500">No samples recorded.</div>
@@ -649,12 +685,29 @@ export default function DatasetPage() {
                                     {sampleValues.map((value, index) => (
                                       <span
                                         key={index}
-                                        className="rounded bg-gray-100 px-2 py-1 font-mono text-xs text-gray-700"
+                                        className={`rounded px-2 py-1 font-mono text-xs ${
+                                          column.masked
+                                            ? "bg-amber-50 text-amber-700"
+                                            : "bg-gray-100 text-gray-700"
+                                        }`}
                                       >
                                         {value}
                                       </span>
                                     ))}
                                   </div>
+                                )}
+                                {canMaskColumns && (
+                                  <button
+                                    onClick={() => handleToggleColumnMasking(column)}
+                                    disabled={savingMaskColumnId === column.id}
+                                    className="mt-2 rounded-lg border px-3 py-1.5 text-xs font-medium text-gray-700 hover:bg-gray-50 disabled:opacity-50"
+                                  >
+                                    {savingMaskColumnId === column.id
+                                      ? "Saving..."
+                                      : column.masked
+                                        ? "Unmask for Viewers"
+                                        : "Mask from Viewers"}
+                                  </button>
                                 )}
                               </div>
 

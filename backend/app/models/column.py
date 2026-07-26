@@ -68,6 +68,14 @@ class DatasetColumn(Base):
     # MANUAL override of classification doesn't freeze this too.
     sample_values = Column(String, nullable=True)
 
+    # Data Owner/admin-set control, independent of classification:
+    # classification says *what* a column is (PII, FINANCIAL, ...),
+    # masking says whether a Viewer is actually allowed to see its
+    # sample values. Never auto-set - a rescan refreshing
+    # sample_values must not silently unmask a column an owner
+    # deliberately locked down.
+    masked = Column(Boolean, default=False, nullable=False)
+
     dataset = relationship(
         "Dataset",
         back_populates="columns"
