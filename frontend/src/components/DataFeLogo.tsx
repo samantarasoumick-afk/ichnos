@@ -18,19 +18,19 @@ export function DataFeMark({ size = 28 }: { size?: number }) {
     >
       <rect width="64" height="64" rx="15" fill="#14121F" />
       <polygon
-        points="32,16.5 45.5,24.7 45.5,41.3 32,49.5 18.5,41.3 18.5,24.7"
+        points="32,4 56.25,18 56.25,46 32,60 7.75,46 7.75,18"
         stroke="#C17845"
-        strokeWidth="2.3"
+        strokeWidth="3.4"
         fill="none"
         strokeLinejoin="round"
       />
       <text
         x="32"
-        y="37.5"
+        y="41"
         textAnchor="middle"
         fontFamily="Arial, sans-serif"
         fontWeight="700"
-        fontSize="14.5"
+        fontSize="26"
         fill="#C17845"
       >
         Fe
