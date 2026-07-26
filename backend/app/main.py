@@ -46,6 +46,7 @@ from app.models.business_process import BusinessProcess, BusinessProcessLink
 from app.models.control import Control
 from app.models.risk import Risk, RiskDatasetLink, RiskProcessLink, RiskControlLink
 from app.models.magic_login_token import MagicLoginToken
+from app.models.marketing_event import MarketingEvent
 
 
 
@@ -77,6 +78,8 @@ from app.api.controls import router as controls_router
 from app.api.search import router as search_router
 from app.api.mentions import router as mentions_router
 from app.api.query_log import router as query_log_router
+from app.api.platform import router as platform_router
+from app.api.marketing import router as marketing_router
 from app.api.columns import (
     router as columns_router
 )
@@ -203,6 +206,8 @@ app.include_router(controls_router)
 app.include_router(search_router)
 app.include_router(mentions_router)
 app.include_router(query_log_router)
+app.include_router(platform_router)
+app.include_router(marketing_router)
 
 # CORS_ALLOWED_ORIGINS is a comma-separated list of exact origins,
 # e.g. "https://app.example.com,http://localhost:3000". Wildcard

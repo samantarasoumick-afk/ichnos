@@ -13,6 +13,7 @@ from app.schemas.assistant import AskResponse
 
 from app.auth.dependencies import get_current_user
 from app.services.assistant_service import answer_question
+from app.services.entitlements import enforce_ask_limit
 from app.services.query_log_service import classify_ask_answer
 from app.services.query_log_service import log_query_event
 
@@ -39,6 +40,11 @@ def ask(
             status_code=400,
             detail="Ask a question first."
         )
+
+    # The cost guard: checked before the Anthropic API is ever
+    # called, so a capped org's request fails fast and cheaply
+    # instead of after spending tokens.
+    enforce_ask_limit(db, current_user)
 
     history = [{"role": turn.role, "text": turn.text} for turn in payload.history]
 

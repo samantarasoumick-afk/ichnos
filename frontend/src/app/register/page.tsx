@@ -14,6 +14,17 @@ export default function RegisterPage() {
   const [loading, setLoading] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
+  // Read once, lazily, rather than via useSearchParams() - see
+  // discussions/page.tsx's typeFilter for why (a Suspense boundary
+  // requirement for what's just a one-off, non-reactive read).
+  // Present when this link came from the marketing site's tracking
+  // snippet (website/index.html) - absent for anyone who reached
+  // /register directly, which is fine.
+  const [anonId] = useState<string | null>(() => {
+    if (typeof window === "undefined") return null;
+    return new URLSearchParams(window.location.search).get("anon_id");
+  });
+
   async function handleSubmit(event: React.FormEvent) {
     event.preventDefault();
 
@@ -21,7 +32,7 @@ export default function RegisterPage() {
     setLoading(true);
 
     try {
-      await register(email, password, organizationName);
+      await register(email, password, organizationName, anonId);
     } catch (error) {
       const detail =
         // eslint-disable-next-line @typescript-eslint/no-explicit-any

@@ -62,6 +62,20 @@ def get_current_user(
     if not user.is_active:
         raise credentials_exception
 
+    # A platform-admin suspension is a kill switch independent of
+    # plan/billing status - checked here so it applies to every
+    # authenticated route in one place rather than needing to be
+    # threaded through each router individually. Nothing is deleted;
+    # lifting is_suspended immediately restores access.
+    if user.organization and user.organization.is_suspended:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail=(
+                "This organization's access has been suspended. "
+                "Contact support if you believe this is a mistake."
+            ),
+        )
+
     return user
 
 
@@ -89,3 +103,24 @@ def require_role(*allowed_roles: str):
         return current_user
 
     return dependency
+
+
+def require_platform_admin(
+    current_user: User = Depends(get_current_user)
+) -> User:
+    """
+    Gates the cross-org platform admin API (app/api/platform.py).
+    Completely separate from require_role("admin") - that's scoped to
+    a user's own organization; this is DataFe's own operator role,
+    set directly in the database (see User.is_platform_admin's
+    docstring), never grantable through any API endpoint.
+    """
+
+    if not current_user.is_platform_admin:
+
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="This action requires platform admin access."
+        )
+
+    return current_user

@@ -19,6 +19,7 @@ from app.schemas.tableau import TableauConnectRequest
 from app.auth.dependencies import get_current_user
 from app.auth.dependencies import require_role
 from app.services.audit_service import log_audit_event
+from app.services.entitlements import enforce_source_limit
 from app.services.dataset_ingestion_service import ingest_dataset_info
 from app.services.dbt_ingestion_service import ingest_dbt_project
 from app.services.tableau_ingestion_service import ingest_tableau_workbooks
@@ -67,6 +68,8 @@ def create_source(
     db: Session = Depends(get_db),
     current_user: User = Depends(require_role("admin", "steward"))
 ):
+
+    enforce_source_limit(db, current_user)
 
     existing_source = (
         db.query(DataSource)
@@ -137,6 +140,8 @@ def upload_file_source(
             status_code=400,
             detail="Only .csv files are supported right now."
         )
+
+    enforce_source_limit(db, current_user)
 
     existing_source = (
         db.query(DataSource)
@@ -244,6 +249,8 @@ def upload_dbt_source(
             status_code=400,
             detail="manifest_file must be a .json file (dbt's target/manifest.json)."
         )
+
+    enforce_source_limit(db, current_user)
 
     existing_source = (
         db.query(DataSource)
@@ -371,6 +378,8 @@ def connect_tableau_source(
     "would this table's data show up in this workbook" is exactly the
     downstream-impact question lineage answers.
     """
+
+    enforce_source_limit(db, current_user)
 
     existing_source = (
         db.query(DataSource)

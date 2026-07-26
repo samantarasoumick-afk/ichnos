@@ -30,7 +30,8 @@ type AuthContextValue = {
   register: (
     email: string,
     password: string,
-    organizationName: string
+    organizationName: string,
+    anonId?: string | null
   ) => Promise<void>;
   loginWithMagicToken: (token: string) => Promise<void>;
   loginWithGithubCode: (code: string, state: string) => Promise<void>;
@@ -108,12 +109,20 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   async function register(
     email: string,
     password: string,
-    organizationName: string
+    organizationName: string,
+    anonId?: string | null
   ) {
     await api.post("/api/auth/register", {
       email,
       password,
       organization_name: organizationName,
+      // Passed through from the marketing site's "Start free" link
+      // (?anon_id=...) so this signup can be traced back to the
+      // visit that led to it - see backend/app/services/
+      // marketing_service.link_anon_id_to_signup. undefined/null
+      // when someone lands on /register directly (no attribution,
+      // still a completely normal signup).
+      anon_id: anonId || undefined,
     });
 
     // Registration doesn't itself return a token - log in immediately

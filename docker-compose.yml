@@ -49,7 +49,13 @@ services:
       DATABASE_URL: postgresql://${POSTGRES_USER:-datafe}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-datafe}
       SECRET_KEY: ${SECRET_KEY:?set SECRET_KEY in .env}
       ENCRYPTION_KEY: ${ENCRYPTION_KEY:?set ENCRYPTION_KEY in .env}
-      CORS_ALLOWED_ORIGINS: ${CORS_ALLOWED_ORIGINS:-http://app.localhost}
+      # Includes the marketing site's own origin (http://localhost, no
+      # "app." prefix) alongside the app's - the site's tracking
+      # snippet (website/index.html) calls POST /backend/api/marketing
+      # /track on the app's origin cross-origin, which needs the
+      # marketing site's origin in this allowlist or the browser
+      # blocks it at the CORS preflight.
+      CORS_ALLOWED_ORIGINS: ${CORS_ALLOWED_ORIGINS:-http://app.localhost,http://localhost}
       FRONTEND_URL: ${FRONTEND_URL:-http://app.localhost}
       SMTP_HOST: ${SMTP_HOST:-}
       SMTP_PORT: ${SMTP_PORT:-587}

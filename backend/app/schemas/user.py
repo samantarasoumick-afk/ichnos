@@ -18,6 +18,14 @@ class UserCreate(BaseModel):
     # an admin in the register endpoint.
     organization_name: str = Field(min_length=1)
 
+    # Optional - the marketing site's tracking snippet passes this
+    # through as a query param on the "Start free" link so the visit
+    # that led to this signup can be traced (see
+    # app/services/marketing_service.link_anon_id_to_signup). Never
+    # required; a signup with no marketing attribution is still a
+    # completely normal signup.
+    anon_id: str | None = None
+
 
 class UserLogin(BaseModel):
 

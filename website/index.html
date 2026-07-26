@@ -596,6 +596,67 @@
       var path = el.getAttribute("data-app-link");
       el.setAttribute("href", appUrl + path);
     });
+
+    // --- Visitor + signup-funnel tracking ---------------------------
+    // anon_id is a random id kept in this browser, not a person - see
+    // backend/app/models/marketing_event.py's docstring for the
+    // privacy reasoning. Every call is best-effort: a blocked
+    // localStorage, an ad blocker eating the fetch, or the backend
+    // being briefly unreachable should never affect anything a
+    // visitor actually sees or can do on this page.
+    var ANON_ID_KEY = "datafe_anon_id";
+    var anonId = null;
+    try {
+      anonId = window.localStorage.getItem(ANON_ID_KEY);
+      if (!anonId) {
+        anonId = (window.crypto && window.crypto.randomUUID)
+          ? window.crypto.randomUUID()
+          : String(Date.now()) + "-" + Math.random().toString(16).slice(2);
+        window.localStorage.setItem(ANON_ID_KEY, anonId);
+      }
+    } catch (e) {
+      // Private browsing / storage disabled - tracking just no-ops.
+    }
+
+    function track(eventType) {
+      if (!anonId) return;
+      var params = new URLSearchParams(window.location.search);
+      var payload = {
+        event_type: eventType,
+        anon_id: anonId,
+        path: window.location.pathname,
+        referrer: document.referrer || null,
+        utm_source: params.get("utm_source"),
+        utm_medium: params.get("utm_medium"),
+        utm_campaign: params.get("utm_campaign"),
+      };
+      try {
+        fetch(appUrl + "/backend/api/marketing/track", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(payload),
+          keepalive: true,
+        }).catch(function () {});
+      } catch (e) {}
+    }
+
+    track("pageview");
+
+    // Every "Start free" / "Start free trial" link: track the click
+    // as a funnel step, and carry anon_id across to the app (a
+    // different origin, so localStorage isn't shared) as a query
+    // param - register() reads it to link this visit to the org it
+    // becomes, once signup actually completes.
+    document.querySelectorAll('[data-app-link="/register"]').forEach(function (el) {
+      el.addEventListener("click", function () {
+        track("signup_started");
+      });
+      if (anonId) {
+        var href = el.getAttribute("href") || "";
+        var separator = href.indexOf("?") === -1 ? "?" : "&";
+        el.setAttribute("href", href + separator + "anon_id=" + encodeURIComponent(anonId));
+      }
+    });
   })();
 </script>
 </body>

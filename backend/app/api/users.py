@@ -16,6 +16,7 @@ from app.auth.security import hash_password
 from app.auth.dependencies import get_current_user
 from app.auth.dependencies import require_role
 from app.services.audit_service import log_audit_event
+from app.services.entitlements import enforce_seat_limit
 
 
 router = APIRouter(
@@ -81,6 +82,11 @@ def invite_team_member(
             status_code=400,
             detail=f"Role must be one of: {', '.join(sorted(VALID_ROLES))}"
         )
+
+    # Viewer seats are free and unlimited on every plan - only
+    # non-viewer ("editor") roles count against the seat cap.
+    if payload.role != "viewer":
+        enforce_seat_limit(db, current_user)
 
     existing_user = (
         db.query(User)

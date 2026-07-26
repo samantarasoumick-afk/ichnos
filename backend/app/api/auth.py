@@ -37,6 +37,7 @@ from app.auth.jwt_handler import create_access_token
 from app.auth.dependencies import get_current_user
 
 from app.services import oauth_service
+from app.services import marketing_service
 from app.services.audit_service import log_audit_event
 from app.services.email_service import send_email
 
@@ -164,6 +165,10 @@ def register_user(
         resource_type="organization",
         resource_id=organization.id,
         details=f"Registered as admin of new organization '{organization.name}'",
+    )
+
+    marketing_service.link_anon_id_to_signup(
+        db, user.anon_id, organization.id, new_user.id
     )
 
     db.commit()

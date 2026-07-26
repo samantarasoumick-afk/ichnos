@@ -99,6 +99,19 @@ class User(Base):
         nullable=False
     )
 
+    # Platform-level superadmin - completely separate from the
+    # org-scoped "admin" role above. An org admin manages their own
+    # organization; a platform admin (DataFe's own operator) can see
+    # rollup activity across every organization and suspend/adjust
+    # plans, but still can't read another org's datasets/sources -
+    # see app/api/platform.py. Nullable-safe default False; nobody
+    # gets this by accident, it's set directly in the database.
+    is_platform_admin = Column(
+        Boolean,
+        default=False,
+        nullable=False
+    )
+
     organization = relationship(
         "Organization",
         back_populates="users"
