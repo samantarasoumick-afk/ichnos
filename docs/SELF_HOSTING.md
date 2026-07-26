@@ -72,6 +72,23 @@ Edit `.env` and fill in real values - do not ship the placeholders:
   credential becomes unrecoverable without it.
 - `CORS_ALLOWED_ORIGINS` - leave as `http://localhost:3000` for now;
   you'll update this once you have your tunnel URL in step 5.
+- `GITHUB_CLIENT_ID` / `GITHUB_CLIENT_SECRET` - optional, enables the
+  "Continue with GitHub" button on the login page. Register a free
+  OAuth App at https://github.com/settings/developers -> "New OAuth
+  App" (no credit card required, unlike Google's OAuth consent
+  screen). Set:
+  - Homepage URL: your `FRONTEND_URL` value (e.g. `http://app.localhost`)
+  - Authorization callback URL: `<FRONTEND_URL>/login/github/callback`
+    (e.g. `http://app.localhost/login/github/callback`)
+
+  Copy the generated Client ID, and a generated Client Secret, into
+  `.env`. **Revisit this once you reach step 5** - the callback URL
+  has to match whatever `FRONTEND_URL` ends up being for your tunnel,
+  so you'll need to update the GitHub OAuth App's callback URL (and
+  re-save `.env`'s `GITHUB_CLIENT_ID`/`SECRET` if you registered a
+  fresh app rather than editing the existing one) once outside
+  testers are involved. Leave both blank to skip this - the button
+  still shows but returns a clear "not configured" error instead.
 
 ## 4. Start the stack
 
@@ -157,9 +174,20 @@ Either way, once you know the app's public hostname, update `.env`:
 
 ```
 CORS_ALLOWED_ORIGINS=https://app.datafe.yourdomain.com
+FRONTEND_URL=https://app.datafe.yourdomain.com
 ```
 
-and restart: `docker compose up -d`.
+`FRONTEND_URL` matters here too, not just `CORS_ALLOWED_ORIGINS` - it's
+what builds the link in magic-link login emails, and (if you set up
+GitHub OAuth in step 3) the GitHub callback URL. If you leave it on
+`http://app.localhost` after moving to a real tunnel hostname, both of
+those break silently for anyone outside your own machine.
+
+If you configured GitHub OAuth, also go back to the OAuth App at
+https://github.com/settings/developers and update its Authorization
+callback URL to `<new FRONTEND_URL>/login/github/callback`.
+
+Then restart: `docker compose up -d`.
 
 ## 6. Keep it running
 

@@ -1,8 +1,9 @@
 # Roadmap
 
 Last revised: 2026-07-26. Everything under "Delivered" is built and
-covered by the backend test suite (339 passing tests as of this
-revision) and frontend typecheck/lint. Everything under Phases 1-3 is
+covered by the backend test suite (349 passing tests as of this
+revision) and the frontend's own Jest suite (23 tests) plus
+typecheck/lint. Everything under Phases 1-3 is
 what stands between here and a real rollout - see the verdict at the
 end for how to read this list.
 
@@ -83,10 +84,17 @@ customers.
       can receive mail at their account address can always get back
       in). Covers the practical gap the old "admin sets a password
       directly" flow left open.
-- [ ] A true SSO option (Google OAuth or similar) - magic-link login
-      above covers the "no self-serve recovery path" problem, but
-      real SSO/SAML is still open, and needs you to register an OAuth
-      app with a provider before it can be wired up
+- [x] A true SSO option: "Sign in with GitHub" (`GET
+      /api/auth/oauth/github/start` + `POST
+      /api/auth/oauth/github/callback`, `app/services/oauth_service.py`).
+      Google OAuth was the original plan but its consent-screen
+      verification requires billing/card details on the Google Cloud
+      account; GitHub's OAuth App registration is free with no card
+      needed, and is arguably the better first provider anyway given
+      DataFe's early users. Links to an existing password/magic-link
+      account by email, or creates a new user + org for a first-time
+      sign-in - same as password registration does. Real SAML for
+      larger enterprise buyers is still open.
 - [x] General API rate limiting (`app/middleware/rate_limit.py`) -
       IP-keyed (X-Forwarded-For-aware, so it survives sitting behind
       the website's nginx reverse proxy), on top of the existing

@@ -83,9 +83,10 @@
       <li>Passwords are hashed with PBKDF2-SHA256, never stored in plaintext.</li>
       <li>Per-account lockout after 5 failed login attempts within 15 minutes, to blunt brute-force attempts.</li>
       <li>Passwordless "magic link" login is available as an alternative to passwords entirely.</li>
+      <li>"Sign in with GitHub" (OAuth) is available as an SSO option, linking to an existing account by email or provisioning a new one on first sign-in.</li>
       <li>Role-based access control with four roles (Admin, Steward, Data Owner, Viewer) enforced on every mutating API endpoint — admin-only actions are actually admin-gated, not just hidden in the UI.</li>
     </ul>
-    <p><span class="status status-open">Open</span> Single sign-on (SSO/SAML) is not yet available. It's on our near-term roadmap and required reading if SSO is a hard requirement in your own security review.</p>
+    <p><span class="status status-open">Open</span> Enterprise SSO/SAML (and additional OAuth providers, e.g. Microsoft/Google) is not yet available. It's on our near-term roadmap and required reading if SAML is a hard requirement in your own security review.</p>
   </section>
 
   <section>

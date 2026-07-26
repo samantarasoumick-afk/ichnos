@@ -9,6 +9,10 @@ from datetime import datetime, timedelta
 from fastapi import APIRouter
 from fastapi import Depends
 from fastapi import HTTPException
+from fastapi import Request
+
+from fastapi.responses import JSONResponse
+from fastapi.responses import RedirectResponse
 
 from sqlalchemy.orm import Session
 
@@ -19,6 +23,7 @@ from app.models.magic_login_token import MagicLoginToken
 from app.models.user import User
 from app.models.organization import Organization
 
+from app.schemas.user import GitHubOAuthCallback
 from app.schemas.user import MagicLinkRequest
 from app.schemas.user import MagicLinkVerify
 from app.schemas.user import UserCreate
@@ -31,6 +36,7 @@ from app.auth.jwt_handler import create_access_token
 
 from app.auth.dependencies import get_current_user
 
+from app.services import oauth_service
 from app.services.audit_service import log_audit_event
 from app.services.email_service import send_email
 
@@ -198,9 +204,13 @@ def login_user(
             )
         )
 
-    valid_password = verify_password(
-        user.password,
-        existing_user.password_hash
+    # GitHub-only accounts (created via OAuth, never given a
+    # password) have no hash to check against - fail the same way an
+    # incorrect password would, rather than passing None into
+    # verify_password().
+    valid_password = (
+        existing_user.password_hash is not None
+        and verify_password(user.password, existing_user.password_hash)
     )
 
     if not valid_password:
@@ -365,6 +375,156 @@ def verify_magic_link(
         "access_token": access_token,
         "token_type": "bearer"
     }
+
+
+GITHUB_OAUTH_STATE_COOKIE = "datafe_github_oauth_state"
+
+# Plenty for a browser round trip to GitHub's consent screen and back
+# - this only needs to outlive the redirect, not a user session.
+GITHUB_OAUTH_STATE_MAX_AGE_SECONDS = 600
+
+
+def _github_redirect_uri() -> str:
+    # Must exactly match the "Authorization callback URL" configured
+    # on the GitHub OAuth App (see docs/SELF_HOSTING.md) - GitHub
+    # rejects the code exchange otherwise. Lands on a real Next.js
+    # page (frontend/src/app/login/github/callback/page.tsx), not a
+    # backend route, since it's a full browser navigation.
+    return f"{FRONTEND_URL}/login/github/callback"
+
+
+@router.get("/oauth/github/start")
+def start_github_oauth():
+    """
+    Kicks off "Sign in with GitHub" by redirecting the browser to
+    GitHub's consent screen. Not an XHR endpoint - the frontend links
+    to this directly (a plain <a href>) so the browser does a real
+    page navigation and GitHub's redirect back to
+    FRONTEND_URL/login/github/callback lands as an ordinary page load,
+    not a blocked cross-origin fetch.
+    """
+
+    state = secrets.token_urlsafe(24)
+
+    try:
+        authorize_url = oauth_service.build_authorize_url(
+            redirect_uri=_github_redirect_uri(),
+            state=state,
+        )
+    except oauth_service.GitHubOAuthError as exc:
+        raise HTTPException(status_code=503, detail=str(exc))
+
+    response = RedirectResponse(url=authorize_url)
+
+    # Bound to this browser via a short-lived cookie rather than a DB
+    # row - the callback below compares the `state` query param GitHub
+    # sends back against this cookie (both must be present and match).
+    # This is the standard "double-submit" CSRF check for OAuth state
+    # when there's no server-side session/nonce table to persist it in.
+    response.set_cookie(
+        key=GITHUB_OAUTH_STATE_COOKIE,
+        value=state,
+        max_age=GITHUB_OAUTH_STATE_MAX_AGE_SECONDS,
+        httponly=True,
+        samesite="lax",
+    )
+
+    return response
+
+
+@router.post("/oauth/github/callback")
+def github_oauth_callback(
+    payload: GitHubOAuthCallback,
+    request: Request,
+    db: Session = Depends(get_db)
+):
+
+    expected_state = request.cookies.get(GITHUB_OAUTH_STATE_COOKIE)
+
+    if not expected_state or expected_state != payload.state:
+        raise HTTPException(
+            status_code=400,
+            detail="This GitHub sign-in link is invalid or has expired. Please try again."
+        )
+
+    try:
+        identity = oauth_service.fetch_github_identity(
+            code=payload.code,
+            redirect_uri=_github_redirect_uri(),
+        )
+    except oauth_service.GitHubOAuthError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+
+    existing_user = (
+        db.query(User)
+        .filter(User.email == identity["email"])
+        .first()
+    )
+
+    if existing_user:
+
+        if not existing_user.is_active:
+            raise HTTPException(
+                status_code=401,
+                detail="This account has been deactivated"
+            )
+
+        # Link this GitHub identity to the existing account the first
+        # time it signs in this way, regardless of whether the account
+        # was originally created with a password or a magic link -
+        # both can add GitHub as an additional way in.
+        if not existing_user.github_id:
+            existing_user.github_id = identity["github_id"]
+
+        user = existing_user
+        audit_action = "user.github_login"
+
+    else:
+
+        # No invite-based join flow exists for any signup path yet
+        # (see register_user above) - a brand-new GitHub sign-in gets
+        # its own new organization, same as a brand-new password
+        # registration does.
+        organization = Organization(
+            name=f"{identity['display_name']}'s Organization",
+            slug=_unique_slug(db, _slugify(identity["display_name"])),
+        )
+        db.add(organization)
+        db.flush()
+
+        user = User(
+            email=identity["email"],
+            password_hash=None,
+            auth_provider="github",
+            github_id=identity["github_id"],
+            role="admin",
+            organization_id=organization.id,
+        )
+        db.add(user)
+        db.flush()
+
+        audit_action = "user.github_register"
+
+    token = create_access_token({
+        "sub": user.email
+    })
+
+    log_audit_event(
+        db,
+        organization_id=user.organization_id,
+        action=audit_action,
+        actor_user_id=user.id,
+        actor_email=user.email,
+    )
+    db.commit()
+
+    response = JSONResponse({
+        "access_token": token,
+        "token_type": "bearer"
+    })
+    response.delete_cookie(GITHUB_OAUTH_STATE_COOKIE)
+
+    return response
 
 
 @router.get("/me")

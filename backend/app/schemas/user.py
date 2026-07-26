@@ -36,6 +36,12 @@ class MagicLinkVerify(BaseModel):
     token: str
 
 
+class GitHubOAuthCallback(BaseModel):
+
+    code: str
+    state: str
+
+
 class TeamMemberInvite(BaseModel):
 
     email: EmailStr

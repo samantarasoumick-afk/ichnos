@@ -33,6 +33,7 @@ type AuthContextValue = {
     organizationName: string
   ) => Promise<void>;
   loginWithMagicToken: (token: string) => Promise<void>;
+  loginWithGithubCode: (code: string, state: string) => Promise<void>;
   logout: () => void;
 };
 
@@ -134,6 +135,24 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     router.push("/");
   }
 
+  async function loginWithGithubCode(code: string, state: string) {
+    // The state param is round-tripped from GitHub back to the
+    // backend here purely so the backend can compare it against the
+    // short-lived cookie it set when /oauth/github/start issued the
+    // redirect (CSRF check) - the frontend itself doesn't need to
+    // validate it, just pass it along.
+    const response = await api.post<{ access_token: string }>(
+      "/api/auth/oauth/github/callback",
+      { code, state }
+    );
+
+    window.localStorage.setItem(TOKEN_KEY, response.data.access_token);
+
+    await refreshCurrentUser();
+
+    router.push("/");
+  }
+
   function logout() {
     window.localStorage.removeItem(TOKEN_KEY);
     setUser(null);
@@ -142,7 +161,15 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   return (
     <AuthContext.Provider
-      value={{ user, loading, login, register, loginWithMagicToken, logout }}
+      value={{
+        user,
+        loading,
+        login,
+        register,
+        loginWithMagicToken,
+        loginWithGithubCode,
+        logout,
+      }}
     >
       {children}
     </AuthContext.Provider>
