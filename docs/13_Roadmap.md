@@ -1,9 +1,9 @@
 # Roadmap
 
-Last revised: 2026-07-26. Everything under "Delivered" is built and
-covered by the backend test suite (371 passing tests as of this
-revision) and the frontend's own Jest suite (47 tests) plus
-typecheck/lint. Everything under Phases 1-3 is
+Last revised: 2026-07-28. Everything under "Delivered" is built and
+covered by the backend test suite (425 passing tests as of this
+revision) and the frontend's own Jest suite (57 tests across 9 files)
+plus typecheck/lint. Everything under Phases 1-3 is
 what stands between here and a real rollout - see the verdict at the
 end for how to read this list.
 
@@ -71,6 +71,18 @@ catalog/DQ/lineage data when `ANTHROPIC_API_KEY` is set, falling back
 to deterministic keyword-matched intents + TF-IDF semantic retrieval
 otherwise; team management.
 
+**Billing & platform operations** - per-plan entitlements (starter/
+team/business/enterprise, plus an open "trial" profile granted from
+signup) enforced at the API layer for sources, editor seats, and Ask
+daily volume; Stripe checkout, webhook, and billing-portal integration
+for self-serve upgrade/downgrade; a platform-admin role (DataFe's own
+operator role, separate from org-scoped RBAC) with a cross-org
+dashboard (funnel stats, organization list with plan overrides,
+suspend/reactivate); website visitor + signup funnel tracking, linked
+across the marketing site and app via a client-side anon_id. Live at
+`datafetech.com` (marketing) / `app.datafetech.com` (app), via
+Cloudflare Tunnel - see `docs/SELF_HOSTING.md`.
+
 ## Rollout-readiness verdict
 
 The product surface area above is strong for the target segment -
@@ -118,12 +130,18 @@ customers.
       not just "the process is up") and structured JSON logging with
       a request ID on every log line, tying a user-reported error back
       to the exact log lines it produced
+- [ ] Dev/production environment split with real CD - today `main` is
+      both the dev branch and what production tracks directly, with no
+      gate in between. See `docs/14_CI_CD_and_Environments.md` for the
+      in-progress branch strategy and self-hosted-runner deploy plan.
 
 ## Phase 2: Product completion (before charging money)
 
-- [ ] Billing/subscription enforcement - the pricing strategy doc
-      (`docs/DataFe_Pricing_Strategy.docx`) describes tiers, but
-      nothing in the app meters or enforces them yet
+- [x] Billing/subscription enforcement - entitlements enforced at the
+      API layer, Stripe checkout/webhook/portal wired up. The pricing
+      strategy doc (`docs/DataFe_Pricing_Strategy.docx`) still needs a
+      pass to strip old Ichnos-era internal references - tracked
+      separately, doesn't block this checkbox.
 - [x] Masking capability for sensitive columns - Data Owner/admin can
       mask a column's sample values from Viewers; classification now
       leads to an actual control, not just a label
@@ -137,8 +155,10 @@ customers.
 - [x] A connector matching a typical small company's real stack:
       Stripe (SaaS-of-record, not warehouse-native) - Salesforce/
       HubSpot/QuickBooks remain open, tracked in the backlog
-- [ ] Frontend automated test coverage (Jest/Playwright) - today only
-      the backend has tests, so UI regressions can ship silently
+- [x] Frontend automated test coverage - Jest suite (57 tests across
+      9 files) covering search, mention-picker, data quality display,
+      and stewardship-gap logic. Playwright end-to-end coverage is
+      still open, tracked in the backlog.
 - [x] Terms of Service, DPA, and Privacy Policy - live at /terms.html,
       /dpa.html, /privacy.html, explicitly flagged as early-access
       drafts pending real legal review

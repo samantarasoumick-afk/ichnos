@@ -2,9 +2,9 @@ name: CI
 
 on:
   push:
-    branches: [main]
+    branches: [main, production]
   pull_request:
-    branches: [main]
+    branches: [main, production]
 
 jobs:
   backend-tests:
@@ -68,3 +68,35 @@ jobs:
       - name: Build
         working-directory: frontend
         run: npm run build
+
+  deploy:
+    name: Deploy to production
+    # Only fires on a push (i.e. a merge) straight to `production` -
+    # never on a PR, and never on main. Gated behind both check jobs
+    # passing first, so a red CI run can never reach the deploy step.
+    if: github.ref == 'refs/heads/production' && github.event_name == 'push'
+    needs: [backend-tests, frontend-checks]
+    runs-on: [self-hosted, production]
+    # ^ Requires a self-hosted runner registered against this repo
+    # with the "production" label, running on the actual host that
+    # serves datafetech.com. See docs/14_CI_CD_and_Environments.md for
+    # the exact install/registration steps - there is no such runner
+    # yet, this job will simply never pick up until one exists.
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          # Do NOT let checkout wipe untracked files - .env lives in
+          # this same working directory and is gitignored (never
+          # committed), so a default "clean" checkout would delete
+          # the running instance's real secrets on every deploy.
+          clean: false
+
+      - name: Deploy (build + restart containers)
+        run: docker compose up -d --build
+        # Deliberately does NOT run `docker compose down -v` - that
+        # wipes the Postgres volume, i.e. every real customer's data.
+        # `up -d --build` rebuilds images from the new code and
+        # restarts only what changed; the backend container's own
+        # entrypoint runs Alembic migrations before serving, so schema
+        # changes apply automatically on every deploy too.
