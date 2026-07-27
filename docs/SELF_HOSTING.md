@@ -140,11 +140,12 @@ only):**
    site, not for testers who need to log into the app. Use the Named
    Tunnel option below for real testing.
 
-**Named Tunnel (needs a free Cloudflare account and a domain, even a
-cheap one bought just for this) - gives you both hostnames:**
+**Named Tunnel (needs a free Cloudflare account and a domain) - gives
+you both hostnames. The domain is `datafetech.com`, registered and
+managed through Cloudflare:**
 
-1. `cloudflared tunnel login` - opens a browser, log into (or create)
-   your Cloudflare account and pick the domain.
+1. `cloudflared tunnel login` - opens a browser, log into your
+   Cloudflare account and pick `datafetech.com` when prompted.
 2. `cloudflared tunnel create datafe`
 3. Create a config file (e.g. `C:\Users\<you>\.cloudflared\config.yml`).
    Both hostnames point at the same local port - the `website`
@@ -154,27 +155,29 @@ cheap one bought just for this) - gives you both hostnames:**
    tunnel: datafe
    credentials-file: C:\Users\<you>\.cloudflared\<tunnel-id>.json
    ingress:
-     - hostname: datafe.yourdomain.com
+     - hostname: datafetech.com
        service: http://localhost:80
-     - hostname: app.datafe.yourdomain.com
+     - hostname: app.datafetech.com
        service: http://localhost:80
      - service: http_status:404
    ```
-4. `cloudflared tunnel route dns datafe datafe.yourdomain.com` and
-   `cloudflared tunnel route dns datafe app.datafe.yourdomain.com`.
+4. `cloudflared tunnel route dns datafe datafetech.com` and
+   `cloudflared tunnel route dns datafe app.datafetech.com` - this
+   creates the CNAME records in the `datafetech.com` zone pointing at
+   the tunnel automatically; nothing to add by hand in the Cloudflare
+   DNS dashboard.
 5. Run it as a Windows service so it survives reboots:
    `cloudflared service install`, then `net start cloudflared` (or
    just leave `cloudflared tunnel run datafe` running in a terminal
    window for casual testing).
-6. Testers now see the marketing site at
-   `https://datafe.yourdomain.com` and reach the app at
-   `https://app.datafe.yourdomain.com`.
+6. Testers now see the marketing site at `https://datafetech.com` and
+   reach the app at `https://app.datafetech.com`.
 
 Either way, once you know the app's public hostname, update `.env`:
 
 ```
-CORS_ALLOWED_ORIGINS=https://app.datafe.yourdomain.com
-FRONTEND_URL=https://app.datafe.yourdomain.com
+CORS_ALLOWED_ORIGINS=https://app.datafetech.com,https://datafetech.com
+FRONTEND_URL=https://app.datafetech.com
 ```
 
 `FRONTEND_URL` matters here too, not just `CORS_ALLOWED_ORIGINS` - it's
