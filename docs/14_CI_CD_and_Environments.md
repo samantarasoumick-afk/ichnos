@@ -21,7 +21,7 @@ authored on production itself.
 Two running copies of the app exist, and they should stay
 deliberately different in a few ways:
 
-| | Dev (your Mac, day to day) | Production (`datafetech.com`) |
+| | Dev (your Mac, day to day) | Production (Windows laptop, `datafetech.com`) |
 |---|---|---|
 | Branch | `main` | `production` |
 | `.env` `FRONTEND_URL` | `http://app.localhost` | `https://app.datafetech.com` |
@@ -54,7 +54,7 @@ wholesale between machines - only specific values (like a rotated
 If the `deploy` job never appears / stays queued forever, the
 self-hosted runner isn't running - see below.
 
-## Self-hosted runner setup (one-time, on the production host)
+## Self-hosted runner setup (one-time, on the Windows laptop)
 
 GitHub Actions' cloud runners can't reach a machine sitting behind a
 home network - there's no public IP or SSH access to deploy to
@@ -63,37 +63,49 @@ small agent process runs on the production machine itself and polls
 GitHub for jobs, so no inbound connection is ever needed - the same
 outbound-only model as the Cloudflare Tunnel already in use.
 
-On the production host (whichever machine is actually serving
-`datafetech.com` - see `docs/SELF_HOSTING.md` for how that's chosen):
+Production is the Windows laptop running `cloudflared` and the
+`docker compose` stack behind `datafetech.com`. Set the runner up
+there, in PowerShell:
 
 1. GitHub repo → **Settings → Actions → Runners → New self-hosted
-   runner**. Pick the OS shown (macOS or Windows, matching the
-   production host).
-2. Follow the exact download/configure commands GitHub generates on
-   that page - they include a one-time registration token, so copy
-   them fresh from the page rather than reusing old commands from
-   elsewhere. When prompted for labels during `./config.sh` (or
-   `config.cmd` on Windows), add the label `production` (in addition
-   to the defaults) - the deploy job in `.github/workflows/ci.yml`
-   specifically targets `[self-hosted, production]`, so the label has
-   to match exactly.
-3. Run it as a persistent service rather than a one-off foreground
-   process, so it survives reboots the same way `cloudflared` and
-   Docker Desktop do:
-   - macOS: `./svc.sh install && ./svc.sh start` (from inside the
-     runner's install directory).
-   - Windows: the runner's own setup script offers to install itself
-     as a Windows service - accept that prompt.
-4. Confirm it shows **Idle** (green) on the Settings → Actions →
+   runner** → select **Windows**.
+2. Copy and run the exact download/configure commands the page
+   generates - they include a one-time registration token, so use the
+   fresh commands from that page rather than reusing these. They'll
+   look like:
+   ```powershell
+   mkdir actions-runner ; cd actions-runner
+   Invoke-WebRequest -Uri <url-from-the-page> -OutFile actions-runner-win-x64.zip
+   Expand-Archive -Path actions-runner-win-x64.zip -DestinationPath $PWD
+   ./config.cmd --url https://github.com/samantarasoumick-afk/ichnos --token <token-from-the-page>
+   ```
+3. When `config.cmd` prompts for runner labels, add `production` in
+   addition to the defaults it suggests - the deploy job in
+   `.github/workflows/ci.yml` specifically targets
+   `[self-hosted, production]`, so the label has to match exactly. It
+   will also ask which folder to run jobs in - the default (inside
+   the `actions-runner` folder itself) is fine.
+4. Install it as a Windows service so it survives reboots the same
+   way Docker Desktop and `cloudflared` do, rather than needing a
+   terminal window left open:
+   ```powershell
+   ./svc.cmd install
+   ./svc.cmd start
+   ```
+5. Confirm it shows **Idle** (green) on the Settings → Actions →
    Runners page - that means it's polling and ready.
-5. Make sure a real `.env` file already exists in the runner's working
-   directory for this repo (typically
-   `actions-runner/_work/ichnos/ichnos/.env` on macOS, or the
-   equivalent path on Windows) before the first deploy runs - it won't
-   be there automatically (`.env` is gitignored, so `git`/`checkout`
-   never creates it). Copy your existing production `.env` there once;
-   after that it persists across deploys since the checkout step is
-   configured with `clean: false`.
+6. Before the first deploy runs, copy your real production `.env`
+   file into the runner's checkout folder for this repo - typically
+   `actions-runner\_work\ichnos\ichnos\.env`. It won't be there
+   automatically (`.env` is gitignored, so `checkout` never creates
+   it), and it only needs doing once - after that it persists across
+   deploys since the checkout step is configured with `clean: false`.
+   This becomes the new canonical clone the deploy step builds from;
+   your existing manually-cloned folder is no longer what's actually
+   serving `datafetech.com` once this is set up, so treat this
+   `actions-runner\_work\ichnos\ichnos` folder as production from here
+   on (or point `docker compose` commands you run by hand at it too,
+   to avoid two folders drifting apart).
 
 From this point on, merging `main` into `production` is the entire
 deploy process - no manual `git pull` / `docker compose up --build` on
