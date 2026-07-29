@@ -47,18 +47,18 @@ before "see more" - front-load the hook:
 
 > Your data has a story. DataFe helps you actually read it.
 >
-> DataFe is a metadata catalog and governance platform for small and
-> mid-size companies - the kind of governance Collibra and Informatica
-> sell to enterprises, built and priced for teams that have real
+> DataFe is a metadata intelligence and governance platform for small
+> and mid-size companies - built and priced for teams with real
 > governance needs (PII exposure, scattered ownership, no single
-> source of truth) but no dedicated platform team or six-figure
+> source of truth) but no dedicated data platform team or six-figure
 > budget.
 >
 > Connect your sources, get automatic lineage and data quality
 > scoring, and let your team stop asking "who owns this?" in Slack.
+>
 > Free to start - no credit card, no sales call.
 >
-> https://datafetech.com
+> datafetech.com
 
 ## 2. Content pillars, mapped to LinkedIn formats
 
