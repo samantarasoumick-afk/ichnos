@@ -3,7 +3,9 @@ import "reactflow/dist/style.css";
 
 import type { Metadata } from "next";
 
+import TourStepper from "../components/TourStepper";
 import { AuthProvider } from "../contexts/AuthContext";
+import { TourProvider } from "../contexts/TourContext";
 
 export const metadata: Metadata = {
   title: "DataFe",
@@ -18,7 +20,12 @@ export default function RootLayout({
   return (
     <html lang="en">
       <body>
-        <AuthProvider>{children}</AuthProvider>
+        <AuthProvider>
+          <TourProvider>
+            {children}
+            <TourStepper />
+          </TourProvider>
+        </AuthProvider>
       </body>
     </html>
   );

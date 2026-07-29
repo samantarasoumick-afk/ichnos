@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
 import MentionDropdown from "../../components/MentionDropdown";
 import TopNav from "../../components/TopNav";
@@ -92,6 +92,32 @@ export default function AskPage() {
     document.body.removeChild(link);
     URL.revokeObjectURL(url);
   }
+
+  // Deep-linkable from the guided tour (?q=who owns customers?&autosubmit=1)
+  // - runs once after the user's loaded, rather than reading
+  // window.location.search into initial state, since submitting needs
+  // submitQuestion (defined below) to exist first. Guarded with a ref
+  // so a re-render (e.g. from asking-state changes) never re-fires it.
+  const ranDeepLinkRef = useRef(false);
+  useEffect(() => {
+    if (authLoading || !user || ranDeepLinkRef.current) return;
+    ranDeepLinkRef.current = true;
+
+    const params = new URLSearchParams(window.location.search);
+    const prefill = params.get("q");
+    if (!prefill) return;
+
+    if (params.get("autosubmit") === "1") {
+      submitQuestion(prefill);
+    } else {
+      // Deferred a tick rather than called synchronously in the
+      // effect body, same reasoning as react-hooks/set-state-in-effect
+      // recommends - this is a one-time prefill from an external
+      // source (the URL), not state React should own the timing of.
+      queueMicrotask(() => setQuestion(prefill));
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [authLoading, user]);
 
   async function submitQuestion(text: string) {
     const trimmed = text.trim();

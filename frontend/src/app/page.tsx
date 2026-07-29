@@ -47,7 +47,14 @@ export default function Home() {
 
   const [openThreadCounts, setOpenThreadCounts] = useState<Record<string, number>>({});
 
-  const [search, setSearch] = useState("");
+  // Deep-linkable from the guided tour (?q=payments) - read once,
+  // lazily, via window.location.search rather than useSearchParams()
+  // (which requires a Suspense boundary in the app router) - same
+  // pattern DiscussionsPage uses for its filters.
+  const [search, setSearch] = useState(() => {
+    if (typeof window === "undefined") return "";
+    return new URLSearchParams(window.location.search).get("q") ?? "";
+  });
   const [domainFilter, setDomainFilter] = useState("ALL");
   const [sensitivityFilter, setSensitivityFilter] = useState("ALL");
   const [certificationFilter, setCertificationFilter] = useState("ALL");

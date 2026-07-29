@@ -1,25 +1,42 @@
 """
-Builds (and tears back down) one coherent, three-layer demo estate so
-a new org can see the whole platform "in motion" without bringing
-their own data first: three different front-office applications (an
-OLTP e-commerce database, a Salesforce-style CRM, a Zendesk-style
-support desk) feeding a dbt-modeled analytics warehouse, reported on
-through Tableau workbooks - the same shape almost every real
-customer's environment takes. One narrative touches every major
-feature rather than scattering unrelated sample rows: PII/financial
-classification, data quality scoring (deliberately varied - some
-tables clean, one deliberately messy), dataset- *and* column-level
-lineage spanning all three layers (including a PCI-style masking
-transformation actually enforced via DatasetColumn.masked, not just
-documented in lineage), one compliant contract and one breached one
-(breached on both a schema check and a DQ-threshold check), all three
-governance-status outcomes (HEALTHY/CRITICAL/REVIEW_REQUIRED), the
-certification approval queue, all three governance discussion types
-(QUESTION/PROPOSAL/ISSUE), a risk register with linked controls, a
-few retention/consent/purpose-filled datasets alongside deliberately
-unassessed ones, a small mixed-role team roster, a handful of logged
-Ask/search queries (including a repeated one that never lands), and
-usage/view tracking.
+Builds (and tears back down) one coherent demo estate so a new org can
+see the whole platform "in motion" without bringing their own data
+first - structured as two problem -> process -> solution stories
+rather than a pile of unrelated sample rows, so the guided tour
+(frontend TourProvider/tourScenarios) has real data to walk through
+for each:
+
+1. "My analysts spend half their time in discovery" - three different
+   front-office applications (an OLTP e-commerce database, a
+   Salesforce-style CRM, a Zendesk-style support desk) feed a
+   dbt-modeled analytics warehouse, reported on through Tableau
+   workbooks - the same shape almost every real customer's environment
+   takes, with an ambiguous "which customer table is real" problem
+   solved by the glossary, system-of-record/reference tagging,
+   lineage, and the Ask assistant.
+2. "My vendors are inconsistent in data quality" - a fourth source, a
+   third-party CSV product feed, deliberately messy in a different way
+   than the first story's tables (inconsistent price formats, sparse
+   categorization, no steward), carrying a stacked schema + DQ-
+   threshold contract breach that propagates - live, via
+   get_upstream_contract_breaches() - all the way to a downstream
+   Tableau report, demonstrating the data contract + lineage-breach-
+   propagation features end to end.
+
+Together these touch every major feature rather than scattering
+unrelated sample rows: PII/financial classification, data quality
+scoring (deliberately varied across multiple tables), dataset- *and*
+column-level lineage spanning all layers (including a PCI-style
+masking transformation actually enforced via DatasetColumn.masked, not
+just documented in lineage), contracts both compliant and breached
+(breached on both a schema check and a DQ-threshold check, in two
+different places), all three governance-status outcomes
+(HEALTHY/CRITICAL/REVIEW_REQUIRED), the certification approval queue,
+all three governance discussion types (QUESTION/PROPOSAL/ISSUE), a
+risk register with linked controls, a few retention/consent/purpose-
+filled datasets alongside deliberately unassessed ones, a small
+mixed-role team roster, a handful of logged Ask/search queries
+(including a repeated one that never lands), and usage/view tracking.
 
 Deliberately reuses the platform's *real* ingestion pipelines rather
 than hand-crafting rows that merely look right:
@@ -664,6 +681,78 @@ def seed_demo_data(db: Session, current_user: User) -> dict:
     db.flush()
 
     # ---------------------------------------------------------------
+    # Layer 1b: A vendor-supplied feed - not one of our own front-office
+    # apps, but a third party's CSV export ingested as-is. This is the
+    # seed for the "our vendors are inconsistent" story: nobody at our
+    # company caused this mess, it arrived this way, and it's what the
+    # data contract + lineage-breach-propagation machinery exists to
+    # catch before it reaches a report - see the contract and the
+    # downstream dbt/Tableau nodes built from this dataset below.
+    # ---------------------------------------------------------------
+
+    vendor_feed = _create_source(
+        db, "Acme Vendor Product Feed (CSV)", "csv", organization_id,
+        {"filename": "acme_product_export.csv", "uploaded_by": current_user.email},
+    )
+
+    ingest_dataset_info(db, vendor_feed, {
+        "schema_name": "vendor_feeds",
+        "table_name": "acme_product_feed",
+        "columns": [
+            ("vendor_sku", "varchar", "NO"),
+            ("product_name", "varchar", "YES"),
+            ("category", "varchar", "YES"),
+            ("unit_price", "numeric", "YES"),
+            ("in_stock_qty", "integer", "YES"),
+            ("vendor_contact_email", "varchar", "YES"),
+            ("last_updated", "varchar", "YES"),
+        ],
+        "row_count": 800,
+        # Messy in a different way than payments: this isn't our own
+        # system under-populating a field, it's a vendor exporting a
+        # CSV with no schema enforced on their end - mixed price
+        # formats ("TBD", "call for price"), a stock count that's
+        # sometimes text instead of a number, sparse categorization,
+        # and a contact field that's supposed to be an email but often
+        # isn't. Looks fine in a spreadsheet preview; only shows up as
+        # a real problem once profiled.
+        "column_stats": {
+            "vendor_sku": {"non_null": 800, "distinct": 650},
+            "product_name": {"non_null": 700, "distinct": 680},
+            "category": {"non_null": 500, "distinct": 12},
+            "unit_price": {"non_null": 750, "distinct": 300},
+            "in_stock_qty": {"non_null": 600, "distinct": 80},
+            "vendor_contact_email": {"non_null": 400, "distinct": 390},
+            "last_updated": {"non_null": 550, "distinct": 500},
+        },
+        "column_samples": {
+            "vendor_sku": ["ACM-1001", "acm-1002", "ACM-1003", "ACM-1001", "ACM-1004"],
+            "product_name": ["Steel Bracket 4in", "Steel Bracket 4in ", "Widget Mount", None],
+            "category": ["Hardware", "Hardware", None, None, "Fasteners", None],
+            "unit_price": ["12.99", "8.50", "TBD", "call for price", "45.00", "N/A", "22.10", "6.75"],
+            "in_stock_qty": ["120", "45", "out of stock", "N/A", "0", "88", "discontinued", "15"],
+            "vendor_contact_email": [
+                "orders@acmesupply.example", "N/A", "unknown", "sales@acmesupply.example",
+                "no email provided", "billing", "support@acmesupply.example", "n/a",
+            ],
+            "last_updated": ["2025-06-01", "06/02/2025", "2 weeks ago", "2025-06-15T10:00:00"],
+        },
+    }, current_user)
+
+    vendor_products = _get_dataset(db, organization_id, "vendor_feeds", "acme_product_feed")
+    vendor_products.owner = "Procurement"
+    vendor_products.domain = "Product"
+    # No steward, same shape as payments above - nobody is actually
+    # accountable for a vendor's own export, which is exactly the
+    # governance gap this scenario exists to surface.
+    vendor_products.steward = None
+    vendor_products.tags = "vendor,product,inventory"
+    vendor_products.purpose = "Third-party product catalog and inventory sync."
+    vendor_products.consent_status = "CONSENT_NOT_REQUIRED"
+
+    db.flush()
+
+    # ---------------------------------------------------------------
     # Layer 2: Data processing - a dbt-modeled analytics warehouse,
     # ingested through the real dbt artifact pipeline.
     # ---------------------------------------------------------------
@@ -727,6 +816,18 @@ def seed_demo_data(db: Session, current_user: User) -> dict:
                 "from stg_orders o join stg_customers c using (customer_id) "
                 "join stg_payments p using (order_id)",
             ),
+            "model.analytics.stg_vendor_products": _node(
+                "analytics_staging", "stg_vendor_products", "Vendor product feed, passed through as-is - cleaning happens downstream, not here.",
+                ["sku", "product_name", "category", "unit_price", "in_stock_qty"], [],
+                "select vendor_sku as sku, product_name, category, unit_price, in_stock_qty "
+                "from raw.acme_product_feed",
+            ),
+            "model.analytics.dim_products": _node(
+                "analytics_marts", "dim_products", "Product dimension for reporting, one row per vendor SKU.",
+                ["sku", "product_name", "category", "unit_price", "in_stock_qty"],
+                ["stg_vendor_products"],
+                "select sku, product_name, category, unit_price, in_stock_qty from stg_vendor_products",
+            ),
         }
     }
 
@@ -750,6 +851,18 @@ def seed_demo_data(db: Session, current_user: User) -> dict:
                     ("order_total", "NUMERIC"), ("masked_card_last4", "VARCHAR"),
                 ], 1150,
             ),
+            "model.analytics.stg_vendor_products": _catalog_node(
+                [
+                    ("sku", "VARCHAR"), ("product_name", "VARCHAR"), ("category", "VARCHAR"),
+                    ("unit_price", "NUMERIC"), ("in_stock_qty", "INTEGER"),
+                ], 800,
+            ),
+            "model.analytics.dim_products": _catalog_node(
+                [
+                    ("sku", "VARCHAR"), ("product_name", "VARCHAR"), ("category", "VARCHAR"),
+                    ("unit_price", "NUMERIC"), ("in_stock_qty", "INTEGER"),
+                ], 650,
+            ),
         }
     }
 
@@ -760,8 +873,10 @@ def seed_demo_data(db: Session, current_user: User) -> dict:
     stg_payments = _get_dataset(db, organization_id, "analytics_staging", "stg_payments")
     dim_customers = _get_dataset(db, organization_id, "analytics_marts", "dim_customers")
     fct_customer_orders = _get_dataset(db, organization_id, "analytics_marts", "fct_customer_orders")
+    stg_vendor_products = _get_dataset(db, organization_id, "analytics_staging", "stg_vendor_products")
+    dim_products = _get_dataset(db, organization_id, "analytics_marts", "dim_products")
 
-    for ds in (stg_customers, stg_orders, stg_payments, dim_customers, fct_customer_orders):
+    for ds in (stg_customers, stg_orders, stg_payments, dim_customers, fct_customer_orders, stg_vendor_products, dim_products):
         ds.owner = "Analytics Engineering"
         ds.domain = "Analytics"
 
@@ -781,6 +896,7 @@ def seed_demo_data(db: Session, current_user: User) -> dict:
     _link(db, orders, stg_orders, "ETL_INGESTION", "Nightly EL job copies raw order records into the staging schema.")
     _link(db, payments, stg_payments, "ETL_INGESTION", "Nightly EL job copies raw payment records into the staging schema.")
     _link(db, leads, stg_customers, "ETL_INGESTION", "CRM leads are matched against confirmed customers by email during the nightly merge.")
+    _link(db, vendor_products, stg_vendor_products, "ETL_INGESTION", "Nightly EL job loads the vendor's CSV export into the staging schema, unmodified.")
 
     _link_columns(db, customers, "email", stg_customers, "email", "PASSTHROUGH")
     _link_columns(db, leads, "contact_email", stg_customers, "email", "MERGE", "CRM lead matched to an existing customer by email.")
@@ -801,6 +917,13 @@ def seed_demo_data(db: Session, current_user: User) -> dict:
     # rather than only a paper trail of it having happened upstream.
     masked_card_last4 = _get_column(db, fct_customer_orders, "masked_card_last4")
     masked_card_last4.masked = True
+
+    _link_columns(db, vendor_products, "vendor_sku", stg_vendor_products, "sku", "PASSTHROUGH")
+    _link_columns(db, vendor_products, "unit_price", stg_vendor_products, "unit_price", "PASSTHROUGH")
+    _link_columns(db, vendor_products, "in_stock_qty", stg_vendor_products, "in_stock_qty", "PASSTHROUGH")
+    _link_columns(db, stg_vendor_products, "sku", dim_products, "sku", "PASSTHROUGH")
+    _link_columns(db, stg_vendor_products, "unit_price", dim_products, "unit_price", "PASSTHROUGH")
+    _link_columns(db, stg_vendor_products, "in_stock_qty", dim_products, "in_stock_qty", "PASSTHROUGH")
 
     db.flush()
 
@@ -830,19 +953,29 @@ def seed_demo_data(db: Session, current_user: User) -> dict:
             "luid": "wb-sla", "name": "Support SLA Report", "project_name": "Customer Success",
             "upstream_tables": [{"schema": "support", "name": "tickets"}],
         },
+        {
+            "luid": "wb-vendor-quality", "name": "Vendor Product Catalog Health", "project_name": "Procurement Analytics",
+            "upstream_tables": [{"schema": "analytics_marts", "name": "dim_products"}],
+        },
     ], current_user)
 
     revenue_dashboard = _get_dataset(db, organization_id, "Executive Reporting", "Revenue Dashboard")
     customer_360 = _get_dataset(db, organization_id, "Customer Success", "Customer 360")
     support_sla_report = _get_dataset(db, organization_id, "Customer Success", "Support SLA Report")
+    vendor_catalog_health = _get_dataset(db, organization_id, "Procurement Analytics", "Vendor Product Catalog Health")
 
-    for ds in (revenue_dashboard, customer_360, support_sla_report):
+    for ds in (revenue_dashboard, customer_360, support_sla_report, vendor_catalog_health):
         ds.owner = "BI Team"
         ds.domain = "Reporting"
 
     _link_columns(
         db, fct_customer_orders, "order_total", revenue_dashboard, "total_revenue", "AGGREGATION",
         "SUM(order_total) grouped by month, shown on the dashboard's headline revenue chart.",
+    )
+    _link_columns(
+        db, dim_products, "unit_price", vendor_catalog_health, "avg_unit_price", "AGGREGATION",
+        "AVG(unit_price) grouped by category, shown on the catalog health scorecard - inherits "
+        "every quality problem already present in the raw vendor feed three hops upstream.",
     )
 
     db.flush()
@@ -856,7 +989,7 @@ def seed_demo_data(db: Session, current_user: User) -> dict:
     # the trail has the same shape a series of real connections would.
     # ---------------------------------------------------------------
 
-    for source in (storefront, salesforce, zendesk, dbt_source, tableau_source):
+    for source in (storefront, salesforce, zendesk, vendor_feed, dbt_source, tableau_source):
         log_audit_event(
             db,
             organization_id=organization_id,
@@ -907,6 +1040,25 @@ def seed_demo_data(db: Session, current_user: User) -> dict:
     )
     db.add(breached_contract)
 
+    # A third contract, on the vendor feed - also stacked (missing
+    # required column + DQ threshold), so the breach this scenario is
+    # built around exists at the very top of the chain, before
+    # get_upstream_contract_breaches() ever needs to look downstream.
+    vendor_contract = DataContract(
+        dataset_id=vendor_products.id,
+        version=1,
+        status="ACTIVE",
+        owner="Procurement",
+        schema_expectations={"columns": [
+            {"name": "vendor_sku", "data_type": "varchar", "required": True},
+            {"name": "unit_price", "data_type": "numeric", "required": True},
+            {"name": "return_policy_url", "data_type": "varchar", "required": True},
+        ]},
+        quality_thresholds={"min_overall_score": 85},
+        freshness_sla_hours=24,
+    )
+    db.add(vendor_contract)
+
     db.flush()
 
     log_audit_event(
@@ -929,12 +1081,23 @@ def seed_demo_data(db: Session, current_user: User) -> dict:
         resource_id=payments.id,
         details=f"Created data contract v1 for '{payments.schema_name}.{payments.name}'.",
     )
+    log_audit_event(
+        db,
+        organization_id=organization_id,
+        action="contract.create",
+        actor_user_id=current_user.id,
+        actor_email=current_user.email,
+        resource_type="dataset",
+        resource_id=vendor_products.id,
+        details=f"Created data contract v1 for '{vendor_products.schema_name}.{vendor_products.name}'.",
+    )
 
     # evaluate_contract() itself logs contract.breach when a contract
     # comes out BREACHED (see data_contract_service.py) - only the
     # creation above needs logging explicitly here.
     evaluate_contract(db, fct_customer_orders, actor_user_id=current_user.id, actor_email=current_user.email)
     evaluate_contract(db, payments, actor_user_id=current_user.id, actor_email=current_user.email)
+    evaluate_contract(db, vendor_products, actor_user_id=current_user.id, actor_email=current_user.email)
 
     # ---------------------------------------------------------------
     # Team roster - a few more accounts with different roles, so the
@@ -1073,6 +1236,28 @@ def seed_demo_data(db: Session, current_user: User) -> dict:
     )
     db.add(issue_thread)
 
+    # A second ISSUE thread, on the vendor feed - the breach traced
+    # all the way to a downstream report is the punchline, so the
+    # thread body says so explicitly rather than leaving it implicit.
+    vendor_issue_thread = GovernanceThread(
+        organization_id=organization_id,
+        dataset_id=vendor_products.id,
+        thread_type="ISSUE",
+        title="Acme's product feed keeps breaching contract - do we need a stricter vendor SLA?",
+        body=(
+            "Price and stock fields are inconsistently formatted in almost every export, and "
+            "nobody's assigned as steward to chase Acme about it. The breach is now visible on "
+            "Vendor Product Catalog Health too, not just the raw feed - it's reaching the report "
+            "our category managers actually look at. Procurement should own getting this fixed "
+            "at the source, not us re-cleaning it every load."
+        ),
+        status="OPEN",
+        created_by=steward_member.id,
+        raised_for_user_id=data_owner_member.id,
+        created_at=datetime.utcnow() - timedelta(hours=4),
+    )
+    db.add(vendor_issue_thread)
+
     # ---------------------------------------------------------------
     # Usage signal, so the popularity story shows something too.
     # ---------------------------------------------------------------
@@ -1140,6 +1325,16 @@ def seed_demo_data(db: Session, current_user: User) -> dict:
     )
     _link_term(db, support_term, tickets)
 
+    sku_term = _glossary_term(
+        db, organization_id, "SKU",
+        "The vendor's own stock-keeping unit identifier for a product - not normalized "
+        "against any internal product ID, so casing/format drift (e.g. 'ACM-1001' vs "
+        "'acm-1002') is expected here rather than treated as an upstream bug.",
+        "Product", "Procurement",
+    )
+    _link_term(db, sku_term, vendor_products, _get_column(db, vendor_products, "vendor_sku"))
+    _link_term(db, sku_term, dim_products)
+
     order_to_cash = _business_process(
         db, organization_id, "Order-to-Cash",
         "Everything from a customer placing an order through to payment being collected and reconciled.",
@@ -1168,6 +1363,22 @@ def seed_demo_data(db: Session, current_user: User) -> dict:
     )
     for ds in (tickets, customer_360, support_sla_report):
         _link_process(db, customer_support, ds)
+
+    vendor_catalog_sync = _business_process(
+        db, organization_id, "Vendor Catalog Sync",
+        "Ingesting and reconciling a third-party vendor's product feed into our own product "
+        "catalog and reporting.",
+        "Procurement",
+        narrative=(
+            "Acme (an external vendor we don't control) exports a product feed we treat as "
+            "Reference-like input data. It's loaded as-is into stg_vendor_products, rolled up "
+            "into the dim_products (Analytical) mart, and reported on in Vendor Product "
+            "Catalog Health - any quality problem in Acme's export is visible at every stop "
+            "along this chain, not just at the source."
+        ),
+    )
+    for ds in (vendor_products, stg_vendor_products, dim_products, vendor_catalog_health):
+        _link_process(db, vendor_catalog_sync, ds)
 
     # ---------------------------------------------------------------
     # Risk register + control library.
@@ -1238,7 +1449,31 @@ def seed_demo_data(db: Session, current_user: User) -> dict:
     db.add(RiskDatasetLink(risk_id=lead_quality_risk.id, dataset_id=leads.id))
     db.add(RiskProcessLink(risk_id=lead_quality_risk.id, process_id=customer_onboarding.id))
 
-    for risk in (card_data_risk, support_pii_risk, lead_quality_risk):
+    vendor_quality_risk = _risk(
+        db, organization_id,
+        "Vendor product feed quality is unmanaged",
+        "acme_product_feed carries inconsistent price formats, partial categorization, and no "
+        "assigned steward - its contract is breached on both a schema check and the quality "
+        "threshold, and that breach now reaches every downstream product report through "
+        "lineage rather than staying contained at the source.",
+        category="DATA_QUALITY", likelihood="HIGH", impact="MEDIUM", status="OPEN",
+        created_by=current_user.id, owner_user_id=data_owner_member.id,
+    )
+    db.add(RiskDatasetLink(risk_id=vendor_quality_risk.id, dataset_id=vendor_products.id))
+    db.add(RiskProcessLink(risk_id=vendor_quality_risk.id, process_id=vendor_catalog_sync.id))
+
+    vendor_validation_control = _control(
+        db, organization_id,
+        "Automated vendor feed validation on ingest",
+        "Proposed: reject or quarantine a vendor file at upload time if it fails schema/quality "
+        "checks, instead of letting a breach reach the report layer first - not yet built, "
+        "which is why this control is still NOT_TESTED.",
+        control_type="PREVENTIVE", status="NOT_TESTED",
+        created_by=current_user.id, owner_user_id=data_owner_member.id,
+    )
+    db.add(RiskControlLink(risk_id=vendor_quality_risk.id, control_id=vendor_validation_control.id))
+
+    for risk in (card_data_risk, support_pii_risk, lead_quality_risk, vendor_quality_risk):
         log_audit_event(
             db,
             organization_id=organization_id,
@@ -1250,7 +1485,7 @@ def seed_demo_data(db: Session, current_user: User) -> dict:
             details=f"Logged risk '{risk.title}'.",
         )
 
-    for control in (masking_control, access_review_control, redaction_control):
+    for control in (masking_control, access_review_control, redaction_control, vendor_validation_control):
         log_audit_event(
             db,
             organization_id=organization_id,
@@ -1280,6 +1515,8 @@ def seed_demo_data(db: Session, current_user: User) -> dict:
         ("search", "payments", True, 3, timedelta(hours=22)),
         ("search", "customer lifetime value", True, 1, timedelta(hours=18)),
         ("search", "refund policy", False, 0, timedelta(hours=8)),
+        ("ask", "do we have any contract breaches?", True, 3, timedelta(hours=7)),
+        ("ask", "what's downstream of the vendor product feed?", True, 2, timedelta(hours=2)),
     ]
     for source, query_text, matched, result_count, ago in demo_queries:
         db.add(QueryLog(
@@ -1303,12 +1540,12 @@ def seed_demo_data(db: Session, current_user: User) -> dict:
         actor_email=current_user.email,
         resource_type="organization",
         resource_id=organization_id,
-        details="Loaded demo data: 5 sources, front office -> processing -> reporting.",
+        details="Loaded demo data: 6 sources, front office -> processing -> reporting.",
     )
 
     db.commit()
 
-    sources_created = 5
+    sources_created = 6
     datasets_created = (
         db.query(Dataset)
         .join(DataSource, Dataset.source_id == DataSource.id)

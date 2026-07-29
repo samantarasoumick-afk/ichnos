@@ -38,7 +38,16 @@ export default function DatasetPage() {
   const { id } = useParams() as { id?: string };
   const { user, loading: authLoading } = useRequireAuth();
 
-  const [activeTab, setActiveTab] = useState<TabKey>("overview");
+  // Deep-linkable from the guided tour (?tab=governance) - same
+  // window.location.search read pattern used elsewhere (DiscussionsPage,
+  // the catalog page, the lineage page) rather than useSearchParams(),
+  // so this page doesn't need a Suspense boundary.
+  const [activeTab, setActiveTab] = useState<TabKey>(() => {
+    if (typeof window === "undefined") return "overview";
+    const raw = new URLSearchParams(window.location.search).get("tab");
+    const valid: TabKey[] = ["overview", "business", "columns", "lineage", "governance", "discussion"];
+    return (valid as string[]).includes(raw ?? "") ? (raw as TabKey) : "overview";
+  });
 
   const [dataset, setDataset] = useState<Dataset | null>(null);
   const [columns, setColumns] = useState<DatasetColumn[]>([]);

@@ -59,14 +59,14 @@ class DemoDataTests(unittest.TestCase):
         r = self._seed(headers)
         self.assertEqual(r.status_code, 200, r.text)
         body = r.json()
-        self.assertEqual(body["sources_created"], 5)
-        self.assertEqual(body["datasets_created"], 15)
+        self.assertEqual(body["sources_created"], 6)
+        self.assertEqual(body["datasets_created"], 19)
 
         r = self.client.get("/api/sources", headers=headers)
         sources = r.json()
-        self.assertEqual(len(sources), 5)
+        self.assertEqual(len(sources), 6)
         types = sorted(s["type"] for s in sources)
-        self.assertEqual(types, ["dbt", "postgres", "salesforce", "tableau", "zendesk"])
+        self.assertEqual(types, ["csv", "dbt", "postgres", "salesforce", "tableau", "zendesk"])
         self.assertTrue(all(s["is_seed_data"] for s in sources))
 
     def test_seed_populates_front_office_processing_and_reporting_datasets(self):
@@ -89,6 +89,10 @@ class DemoDataTests(unittest.TestCase):
         # Reporting (Tableau)
         for name in ("Revenue Dashboard", "Customer 360", "Support SLA Report"):
             self.assertIn(name, by_name, f"missing reporting-layer dataset {name}")
+
+        # Vendor data quality scenario: raw feed -> staging -> mart -> report
+        for name in ("acme_product_feed", "stg_vendor_products", "dim_products", "Vendor Product Catalog Health"):
+            self.assertIn(name, by_name, f"missing vendor-scenario dataset {name}")
 
     # -----------------------------------------------------------
     # Governance status variety
@@ -250,6 +254,56 @@ class DemoDataTests(unittest.TestCase):
         self.assertIn("refund_status", contracts[0]["last_breach_details"])
 
     # -----------------------------------------------------------
+    # Vendor data quality scenario: a third, stacked breach at the top
+    # of a lineage chain, and its propagation to a downstream report.
+    # -----------------------------------------------------------
+
+    def test_seed_creates_a_breached_vendor_contract(self):
+        headers = self._register_and_login(f"demo11b{self._n}@a.com", f"Demo Org 11b {self._n}")
+        self._seed(headers)
+
+        by_name = self._datasets_by_name(headers)
+        vendor_id = by_name["acme_product_feed"]["id"]
+
+        self.assertEqual(by_name["acme_product_feed"]["contract_status"], "BREACHED")
+        self.assertIsNone(by_name["acme_product_feed"]["steward"])
+
+        r = self.client.get("/api/data-contracts", headers=headers, params={"dataset_id": vendor_id})
+        contracts = r.json()
+        self.assertEqual(len(contracts), 1)
+        self.assertIn("return_policy_url", contracts[0]["last_breach_details"])
+        self.assertIn("quality score", contracts[0]["last_breach_details"])
+
+    def test_vendor_contract_breach_propagates_to_downstream_report(self):
+        """
+        The whole point of the vendor scenario: a breach on the raw
+        feed should be visible - live, via get_upstream_contract_
+        breaches(), not something baked into the seeder - three hops
+        downstream on the Tableau report nobody would otherwise think
+        to check.
+        """
+        headers = self._register_and_login(f"demo11c{self._n}@a.com", f"Demo Org 11c {self._n}")
+        self._seed(headers)
+
+        by_name = self._datasets_by_name(headers)
+        report_id = by_name["Vendor Product Catalog Health"]["id"]
+
+        r = self.client.get(
+            f"/api/data-contracts/dataset/{report_id}/upstream-breaches", headers=headers
+        )
+        self.assertEqual(r.status_code, 200, r.text)
+        breaches = r.json()
+        self.assertEqual(len(breaches), 1)
+        self.assertEqual(breaches[0]["dataset_name"], "acme_product_feed")
+
+        # Same check one hop closer to the source.
+        mart_id = by_name["dim_products"]["id"]
+        r = self.client.get(
+            f"/api/data-contracts/dataset/{mart_id}/upstream-breaches", headers=headers
+        )
+        self.assertEqual(len(r.json()), 1)
+
+    # -----------------------------------------------------------
     # Certification queue + discussion thread
     # -----------------------------------------------------------
 
@@ -313,13 +367,14 @@ class DemoDataTests(unittest.TestCase):
     def test_seed_creates_business_processes_spanning_all_three_layers(self):
         headers = self._register_and_login(f"demo22{self._n}@a.com", f"Demo Org 22 {self._n}")
         r = self._seed(headers)
-        self.assertEqual(r.json()["business_processes_created"], 3)
+        self.assertEqual(r.json()["business_processes_created"], 4)
 
         r = self.client.get("/api/business-processes", headers=headers)
         processes = {p["name"]: p for p in r.json()}
         self.assertIn("Order-to-Cash", processes)
         self.assertIn("Customer Onboarding", processes)
         self.assertIn("Customer Support", processes)
+        self.assertIn("Vendor Catalog Sync", processes)
 
         by_name = self._datasets_by_name(headers)
 
@@ -360,8 +415,8 @@ class DemoDataTests(unittest.TestCase):
         r = self.client.post("/api/demo/clear", headers=headers)
         self.assertEqual(r.status_code, 200, r.text)
         body = r.json()
-        self.assertEqual(body["glossary_terms_removed"], 5)
-        self.assertEqual(body["business_processes_removed"], 3)
+        self.assertEqual(body["glossary_terms_removed"], 6)
+        self.assertEqual(body["business_processes_removed"], 4)
 
         r = self.client.get("/api/governance/glossary", headers=headers)
         remaining_terms = {t["id"] for t in r.json()}
@@ -403,7 +458,7 @@ class DemoDataTests(unittest.TestCase):
         self._seed(headers)
 
         r = self.client.get("/api/demo/status", headers=headers)
-        self.assertEqual(r.json(), {"demo_data_loaded": True, "demo_source_count": 5})
+        self.assertEqual(r.json(), {"demo_data_loaded": True, "demo_source_count": 6})
 
         r = self.client.post("/api/demo/clear", headers=headers)
         self.assertEqual(r.status_code, 200, r.text)
@@ -433,8 +488,8 @@ class DemoDataTests(unittest.TestCase):
         r = self.client.post("/api/demo/clear", headers=headers)
         self.assertEqual(r.status_code, 200, r.text)
         body = r.json()
-        self.assertEqual(body["sources_removed"], 5)
-        self.assertEqual(body["datasets_removed"], 15)
+        self.assertEqual(body["sources_removed"], 6)
+        self.assertEqual(body["datasets_removed"], 19)
 
         r = self.client.get("/api/sources", headers=headers)
         remaining = r.json()
@@ -541,8 +596,8 @@ class DemoDataTests(unittest.TestCase):
     def test_seed_creates_risks_linked_to_datasets_processes_and_controls(self):
         headers = self._register_and_login(f"demo24{self._n}@a.com", f"Demo Org 24 {self._n}")
         r = self._seed(headers)
-        self.assertEqual(r.json()["risks_created"], 3)
-        self.assertEqual(r.json()["controls_created"], 3)
+        self.assertEqual(r.json()["risks_created"], 4)
+        self.assertEqual(r.json()["controls_created"], 4)
 
         r = self.client.get("/api/risks", headers=headers)
         self.assertEqual(r.status_code, 200, r.text)
@@ -570,6 +625,16 @@ class DemoDataTests(unittest.TestCase):
         controls_by_name = {control["name"]: control for control in r.json()}
         self.assertEqual(controls_by_name["PCI masking at the analytics layer"]["status"], "EFFECTIVE")
         self.assertEqual(controls_by_name["PCI masking at the analytics layer"]["control_type"], "PREVENTIVE")
+
+        self.assertIn("Vendor product feed quality is unmanaged", risks_by_title)
+        vendor_risk = risks_by_title["Vendor product feed quality is unmanaged"]
+        self.assertEqual(vendor_risk["category"], "DATA_QUALITY")
+
+        r = self.client.get(f"/api/risks/{vendor_risk['id']}", headers=headers)
+        vendor_detail = r.json()
+        by_name = self._datasets_by_name(headers)
+        vendor_linked_ids = {d["id"] for d in vendor_detail["linked_datasets"]}
+        self.assertIn(by_name["acme_product_feed"]["id"], vendor_linked_ids)
 
     def test_seed_masks_the_pci_relevant_column(self):
         headers = self._register_and_login(f"demo25{self._n}@a.com", f"Demo Org 25 {self._n}")
@@ -622,8 +687,8 @@ class DemoDataTests(unittest.TestCase):
         r = self.client.get("/api/discussions", headers=headers, params={"thread_type": "ISSUE"})
         self.assertEqual(r.status_code, 200, r.text)
         issues = r.json()
-        self.assertEqual(len(issues), 1)
-        self.assertIsNotNone(issues[0]["raised_for_user_id"])
+        self.assertEqual(len(issues), 2)
+        self.assertTrue(all(issue["raised_for_user_id"] is not None for issue in issues))
 
         r = self.client.get("/api/discussions", headers=headers, params={"thread_type": "QUESTION"})
         self.assertEqual(len(r.json()), 1)
@@ -675,8 +740,8 @@ class DemoDataTests(unittest.TestCase):
 
         r = self.client.post("/api/demo/clear", headers=headers)
         self.assertEqual(r.status_code, 200, r.text)
-        self.assertEqual(r.json()["risks_removed"], 3)
-        self.assertEqual(r.json()["controls_removed"], 3)
+        self.assertEqual(r.json()["risks_removed"], 4)
+        self.assertEqual(r.json()["controls_removed"], 4)
 
         r = self.client.get("/api/risks", headers=headers)
         self.assertEqual(r.json(), [])

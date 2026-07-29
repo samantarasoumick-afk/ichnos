@@ -25,7 +25,14 @@ export default function LineagePage() {
   const [loading, setLoading] = useState(true);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
-  const [selectedDatasetId, setSelectedDatasetId] = useState("");
+  // Deep-linkable from the guided tour (?dataset=<id>) - same
+  // window.location.search read pattern DiscussionsPage uses, so this
+  // stays a plain client-side filter rather than needing a Suspense
+  // boundary for useSearchParams().
+  const [selectedDatasetId, setSelectedDatasetId] = useState(() => {
+    if (typeof window === "undefined") return "";
+    return new URLSearchParams(window.location.search).get("dataset") ?? "";
+  });
   const [dependencies, setDependencies] = useState<Lineage[]>([]);
   const [impact, setImpact] = useState<Lineage[]>([]);
   const [lookupLoading, setLookupLoading] = useState(false);
