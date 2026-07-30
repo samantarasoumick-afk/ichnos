@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>datfe — Metadata Intelligence & Governance Platform</title>
+<title>DatFe — Metadata Intelligence & Governance Platform</title>
 <meta name="description" content="A metadata catalog and data governance platform for small and mid-size companies — the kind of governance Collibra and Informatica sell to enterprises, priced and built for teams without a dedicated data platform team.">
 <link rel="icon" type="image/svg+xml" href="/favicon.svg">
 <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -12,17 +12,15 @@
 <style>
   :root{
     /* Cool-toned brand system - see docs/DatFe_Brand_Guidelines.docx.
-       Variable names kept as-is to avoid touching every usage site
-       below; only the hex values changed to the new palette. --purple
-       is the metadata capability color, --pink now carries the
-       lineage blue accent, --yellow now carries the quality cyan
-       accent, --teal is the governance capability color. */
+       --purple is the metadata capability color, --accent-blue is the
+       lineage accent, --accent-cyan is the quality accent, --teal is
+       the governance capability color. */
     --ink:#0F172A;
     --paper:#F8FAFC;
     --purple:#8B5CF6;
     --purple-dark:#7C3AED;
-    --pink:#3B82F6;
-    --yellow:#06B6D4;
+    --accent-blue:#3B82F6;
+    --accent-cyan:#06B6D4;
     --teal:#0D9488;
     --line:#E2E8F0;
     --card:#ffffff;
@@ -73,7 +71,7 @@
   .btn-ghost:hover{transform:translateY(-2px);}
   .hero{position:relative; padding:100px 0 80px; overflow:hidden;}
   .hero .blob-1{width:420px; height:420px; background:var(--purple); top:-120px; right:-100px;}
-  .hero .blob-2{width:320px; height:320px; background:var(--yellow); bottom:-80px; left:-80px; opacity:.3;}
+  .hero .blob-2{width:320px; height:320px; background:var(--accent-cyan); bottom:-80px; left:-80px; opacity:.3;}
   .eyebrow{
     display:inline-flex; align-items:center; gap:8px;
     background:#fff; border:1px solid var(--line); border-radius:999px;
@@ -88,7 +86,7 @@
     margin:22px 0 20px; max-width:820px;
   }
   .hero h1 .accent{
-    background:linear-gradient(90deg,var(--purple),var(--pink));
+    background:linear-gradient(90deg,var(--purple),var(--accent-blue));
     -webkit-background-clip:text; background-clip:text; color:transparent;
   }
   .hero p.sub{
@@ -202,7 +200,7 @@
   .pricing-foot{text-align:center; margin-top:36px; color:var(--muted); font-size:.88rem;}
   .stats{background:var(--ink); color:#fff;}
   .stats-grid{display:grid; grid-template-columns:repeat(4,1fr); gap:24px; text-align:center;}
-  .stat h3{font-size:clamp(2rem,4vw,3rem); font-weight:800; background:linear-gradient(90deg,var(--pink),var(--yellow)); -webkit-background-clip:text; background-clip:text; color:transparent;}
+  .stat h3{font-size:clamp(2rem,4vw,3rem); font-weight:800; background:linear-gradient(90deg,var(--accent-blue),var(--accent-cyan)); -webkit-background-clip:text; background-clip:text; color:transparent;}
   .stat p{color:#a8a3bd; font-size:.9rem; margin-top:8px; font-weight:600;}
   .integrations .wrap{text-align:center;}
   .chip-row{display:flex; flex-wrap:wrap; justify-content:center; gap:14px; margin-top:40px;}
@@ -226,7 +224,7 @@
     color:#fff; text-align:center; border-radius:28px; margin:0 24px;
     padding:70px 30px; position:relative; overflow:hidden;
   }
-  .cta::before{content:""; position:absolute; width:300px; height:300px; background:var(--pink); opacity:.35; filter:blur(70px); border-radius:50%; top:-100px; right:-60px;}
+  .cta::before{content:""; position:absolute; width:300px; height:300px; background:var(--accent-blue); opacity:.35; filter:blur(70px); border-radius:50%; top:-100px; right:-60px;}
   .cta h2{font-size:clamp(1.8rem,3.6vw,2.6rem); font-weight:800; letter-spacing:-.02em; position:relative;}
   .cta p{color:#d8d2ff; margin:14px 0 30px; font-size:1.05rem; position:relative;}
   .cta .hero-cta{justify-content:center; position:relative;}
@@ -262,7 +260,7 @@
           <rect x="25" y="25" width="14" height="14" rx="3.5" fill="#fff" />
         </svg>
       </div>
-      <span class="logo-word">datfe</span>
+      <span class="logo-word">DatFe</span>
     </div>
     <div class="nav-links">
       <a href="#features">Product</a>
@@ -283,7 +281,7 @@
   <div class="wrap">
     <span class="eyebrow"><span class="dot"></span> Now in early access</span>
     <h1>Your data has a <span class="accent">story</span>.<br>We help you actually read it.</h1>
-    <p class="sub">datfe turns messy tables, tangled pipelines, and forgotten spreadsheets into a searchable, self-explaining map of everything your company knows. No more tribal knowledge. No more "who owns this?" Slack threads.</p>
+    <p class="sub">DatFe turns messy tables, tangled pipelines, and forgotten spreadsheets into a searchable, self-explaining map of everything your company knows. No more tribal knowledge. No more "who owns this?" Slack threads.</p>
     <div class="hero-cta">
       <a href="#" class="btn btn-primary" data-app-link="/register">Start free →</a>
       <a href="#features" class="btn btn-ghost">See how it works</a>
@@ -292,7 +290,7 @@
     <div class="mock">
       <div class="mock-bar">
         <span></span><span></span><span></span>
-        <span class="path">datafetech.com/catalog/search?q=customer_ltv</span>
+        <span class="path">app.datafetech.com/catalog/search?q=customer_ltv</span>
       </div>
       <div class="mock-body">
         <div class="mock-row">
@@ -333,22 +331,22 @@
     </div>
     <div class="grid-4">
       <div class="fcard">
-        <div class="ficon ic-1">🔍</div>
+        <div class="ficon ic-1"><svg viewBox="0 0 24 24" fill="none" stroke="#0F172A" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" width="22" height="22"><circle cx="10.5" cy="10.5" r="6.5"/><line x1="15.3" y1="15.3" x2="20" y2="20"/></svg></div>
         <h3>Catalog & Discovery</h3>
         <p>A searchable, living map of every table, dashboard, and pipeline. Find the right data in seconds instead of pinging five people on Slack.</p>
       </div>
       <div class="fcard">
-        <div class="ficon ic-2">🕸️</div>
+        <div class="ficon ic-2"><svg viewBox="0 0 24 24" fill="none" stroke="#0F172A" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" width="22" height="22"><circle cx="6" cy="6" r="2.6"/><circle cx="18" cy="6" r="2.6"/><circle cx="12" cy="18" r="2.6"/><line x1="8" y1="7.4" x2="10.3" y2="16"/><line x1="16" y1="7.4" x2="13.7" y2="16"/><line x1="8.5" y1="6" x2="15.5" y2="6"/></svg></div>
         <h3>Lineage & Governance</h3>
         <p>Column-level lineage, business glossary, process repository, data contracts, and a governance maturity score — with automated PII/DPDP classification baked in.</p>
       </div>
       <div class="fcard">
-        <div class="ficon ic-3">✨</div>
+        <div class="ficon ic-3"><svg viewBox="0 0 24 24" fill="#0F172A" width="20" height="20"><path d="M12 2 L14.2 9 L21 11 L14.2 13 L12 20 L9.8 13 L3 11 L9.8 9 Z"/><circle cx="19" cy="4" r="1.4"/><circle cx="4.5" cy="18" r="1.1"/></svg></div>
         <h3>AI-Powered Insights</h3>
         <p>Auto-generated descriptions, smart classification, and a natural-language "Ask" assistant over your catalog. The busywork of metadata, done for you.</p>
       </div>
       <div class="fcard">
-        <div class="ficon ic-4">🔌</div>
+        <div class="ficon ic-4"><svg viewBox="0 0 24 24" fill="none" stroke="#0F172A" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" width="22" height="22"><path d="M12 3 L19 6 V11 C19 15.5 16 18.8 12 20 C8 18.8 5 15.5 5 11 V6 Z"/><path d="M9 11.5 L11 13.5 L15.5 9"/></svg></div>
         <h3>Risk, Controls & Audit</h3>
         <p>A risk register and control library tied to your real datasets, full audit logging, and role-based access — the trust layer governance actually needs.</p>
       </div>
@@ -361,13 +359,13 @@
     <div class="section-head">
       <div class="kicker">How it works</div>
       <h2>From chaos to clarity in three steps</h2>
-      <p>datfe plugs into what you already use — no rip-and-replace, no six-month rollout.</p>
+      <p>DatFe plugs into what you already use — no rip-and-replace, no six-month rollout.</p>
     </div>
     <div class="steps">
       <div class="step">
         <div class="step-num">1</div>
         <h3>Connect your stack</h3>
-        <p>Postgres, MySQL, Snowflake, Redshift, S3, Azure SQL/Synapse, dbt, Tableau, Stripe, or a CSV upload — link a source in minutes and let datfe start scanning.</p>
+        <p>Postgres, MySQL, Snowflake, Redshift, S3, Azure SQL/Synapse, dbt, Tableau, Stripe, or a CSV upload — link a source in minutes and let DatFe start scanning.</p>
       </div>
       <div class="step">
         <div class="step-num">2</div>
@@ -480,7 +478,7 @@
 <section class="stats" id="stats">
   <div class="wrap">
     <div class="section-head" style="max-width:600px;">
-      <div class="kicker" style="color:var(--yellow);">Under the hood</div>
+      <div class="kicker" style="color:var(--accent-cyan);">Under the hood</div>
       <h2 style="color:#fff;">Built with real governance depth, not a demo</h2>
     </div>
     <div class="stats-grid">
@@ -502,12 +500,12 @@
     <div class="chip-row">
       <span class="chip"><span class="chip-dot" style="background:var(--purple);"></span>Postgres</span>
       <span class="chip"><span class="chip-dot" style="background:var(--teal);"></span>MySQL</span>
-      <span class="chip"><span class="chip-dot" style="background:var(--pink);"></span>Snowflake</span>
-      <span class="chip"><span class="chip-dot" style="background:var(--yellow);"></span>Redshift</span>
+      <span class="chip"><span class="chip-dot" style="background:var(--accent-blue);"></span>Snowflake</span>
+      <span class="chip"><span class="chip-dot" style="background:var(--accent-cyan);"></span>Redshift</span>
       <span class="chip"><span class="chip-dot" style="background:var(--purple);"></span>Amazon S3</span>
       <span class="chip"><span class="chip-dot" style="background:var(--teal);"></span>Azure SQL / Synapse</span>
-      <span class="chip"><span class="chip-dot" style="background:var(--pink);"></span>dbt</span>
-      <span class="chip"><span class="chip-dot" style="background:var(--yellow);"></span>Tableau</span>
+      <span class="chip"><span class="chip-dot" style="background:var(--accent-blue);"></span>dbt</span>
+      <span class="chip"><span class="chip-dot" style="background:var(--accent-cyan);"></span>Tableau</span>
       <span class="chip"><span class="chip-dot" style="background:var(--purple);"></span>CSV upload</span>
       <span class="chip"><span class="chip-dot" style="background:var(--teal);"></span>Stripe</span>
     </div>
@@ -560,7 +558,7 @@
               <rect x="25" y="25" width="14" height="14" rx="3.5" fill="#fff" />
             </svg>
           </div>
-          <span class="logo-word">datfe</span>
+          <span class="logo-word">DatFe</span>
         </div>
         <p style="color:var(--muted); font-size:.88rem; line-height:1.6;">The metadata intelligence platform that helps data teams find, trust, and understand everything they know.</p>
       </div>
@@ -591,7 +589,7 @@
       </div>
     </div>
     <div class="foot-bottom">
-      <span>© 2026 datfe Metadata Intelligence. All rights reserved.</span>
+      <span>© 2026 DatFe Metadata Intelligence. All rights reserved.</span>
       <span>Built for data teams who'd rather build than search.</span>
     </div>
   </div>
