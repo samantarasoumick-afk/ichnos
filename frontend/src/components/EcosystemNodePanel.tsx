@@ -20,6 +20,7 @@ type Props = {
   audience: Audience;
   onClose: () => void;
   onSelectDataset: (dataset: EcosystemDatasetNode) => void;
+  onTrace?: () => void;
 };
 
 function Row({ label, value }: { label: string; value: React.ReactNode }) {
@@ -106,7 +107,15 @@ function EcosystemLineageList({
   );
 }
 
-function TraceSection({ datasetId, defaultDirection }: { datasetId: string; defaultDirection: EcosystemTraceDirection }) {
+function TraceSection({
+  datasetId,
+  defaultDirection,
+  onTrace,
+}: {
+  datasetId: string;
+  defaultDirection: EcosystemTraceDirection;
+  onTrace?: () => void;
+}) {
   const [direction, setDirection] = useState<EcosystemTraceDirection>(defaultDirection);
   const [trace, setTrace] = useState<EcosystemTrace | null>(null);
   const [loading, setLoading] = useState(false);
@@ -121,6 +130,7 @@ function TraceSection({ datasetId, defaultDirection }: { datasetId: string; defa
         params: { direction: nextDirection },
       });
       setTrace(response.data);
+      onTrace?.();
     } catch (err) {
       console.error(err);
       setError("Unable to trace this dataset's lineage right now.");
@@ -194,7 +204,7 @@ function TraceSection({ datasetId, defaultDirection }: { datasetId: string; defa
   );
 }
 
-export default function EcosystemNodePanel({ graph, selection, audience, onClose, onSelectDataset }: Props) {
+export default function EcosystemNodePanel({ graph, selection, audience, onClose, onSelectDataset, onTrace }: Props) {
   if (!selection) {
     return (
       <div className="rounded-xl border bg-white p-6 text-sm text-gray-500">
@@ -318,6 +328,7 @@ export default function EcosystemNodePanel({ graph, selection, audience, onClose
         key={dataset.id}
         datasetId={dataset.id}
         defaultDirection={dataset.tier === "FRONT_OFFICE" ? "downstream" : "upstream"}
+        onTrace={onTrace}
       />
 
       <Link

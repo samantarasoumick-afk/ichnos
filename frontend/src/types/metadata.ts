@@ -832,3 +832,30 @@ export type EcosystemTrace = {
   narrative: string;
   narrative_source: "llm" | "template";
 };
+
+// --- Onboarding progress tracker ---
+// Makes the "10 days instead of 3 months" claim measurable: a fixed
+// set of real Ecosystem View actions, each recorded once per user.
+
+export type OnboardingMilestoneKey =
+  | "VIEWED_ECOSYSTEM_MAP"
+  | "EXPLORED_FRONT_OFFICE"
+  | "EXPLORED_MIDDLE_OFFICE"
+  | "EXPLORED_BACK_OFFICE"
+  | "TRACED_PROVENANCE"
+  | "USED_SEMANTIC_SEARCH";
+
+export type OnboardingMilestone = {
+  key: OnboardingMilestoneKey;
+  label: string;
+  completed: boolean;
+  achieved_at: string | null;
+};
+
+export type OnboardingProgress = {
+  milestones: OnboardingMilestone[];
+  completed_count: number;
+  total_count: number;
+  percent_complete: number;
+  ramp_days: number | null;
+};
