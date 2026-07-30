@@ -91,7 +91,7 @@ export default function DiscussionThreadPage() {
   if (authLoading || !user) {
     return (
       <main className="min-h-screen bg-gray-100 p-10">
-        <div className="rounded-lg bg-white p-6 shadow">Loading...</div>
+        <div className="rounded-xl bg-white p-6 shadow">Loading...</div>
       </main>
     );
   }
@@ -116,7 +116,7 @@ export default function DiscussionThreadPage() {
       )}
 
       {loading && (
-        <div className="mt-6 rounded-lg bg-white p-6 shadow">Loading...</div>
+        <div className="mt-6 rounded-xl bg-white p-6 shadow">Loading...</div>
       )}
 
       {!loading && thread && (

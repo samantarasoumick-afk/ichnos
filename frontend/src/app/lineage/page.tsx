@@ -131,7 +131,7 @@ export default function LineagePage() {
   if (authLoading || !user) {
     return (
       <main className="min-h-screen bg-gray-100 p-10">
-        <div className="rounded-lg bg-white p-6 shadow">Loading...</div>
+        <div className="rounded-xl bg-white p-6 shadow">Loading...</div>
       </main>
     );
   }
@@ -158,7 +158,7 @@ export default function LineagePage() {
       )}
 
       {loading && (
-        <div className="rounded-lg bg-white p-6 shadow">
+        <div className="rounded-xl bg-white p-6 shadow">
           Loading lineage...
         </div>
       )}
@@ -276,7 +276,7 @@ export default function LineagePage() {
       )}
 
       {!loading && !errorMessage && lineage.length === 0 && (
-        <div className="rounded-lg bg-white p-6 shadow">
+        <div className="rounded-xl bg-white p-6 shadow">
           No lineage relationships have been registered yet.
         </div>
       )}

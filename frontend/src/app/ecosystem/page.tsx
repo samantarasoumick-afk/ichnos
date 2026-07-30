@@ -135,7 +135,7 @@ export default function EcosystemPage() {
   if (authLoading || !user) {
     return (
       <main className="min-h-screen bg-gray-100 p-10">
-        <div className="rounded-lg bg-white p-6 shadow">Loading...</div>
+        <div className="rounded-xl bg-white p-6 shadow">Loading...</div>
       </main>
     );
   }
@@ -158,7 +158,7 @@ export default function EcosystemPage() {
         <div className="mb-6 rounded border border-red-200 bg-red-50 p-4 text-red-700">{errorMessage}</div>
       )}
 
-      {loading && <div className="rounded-lg bg-white p-6 shadow">Loading the ecosystem map...</div>}
+      {loading && <div className="rounded-xl bg-white p-6 shadow">Loading the ecosystem map...</div>}
 
       {!loading && !errorMessage && graph && (
         <>

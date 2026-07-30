@@ -354,7 +354,7 @@ export default function DatasetPage() {
   if (authLoading || !user) {
     return (
       <main className="min-h-screen p-10 bg-gray-100">
-        <div className="rounded-lg bg-white p-6 shadow">Loading...</div>
+        <div className="rounded-xl bg-white p-6 shadow">Loading...</div>
       </main>
     );
   }
@@ -375,7 +375,7 @@ export default function DatasetPage() {
     return (
       <main className="min-h-screen p-10 bg-gray-100">
         <TopNav />
-        <div className="rounded-lg bg-white p-6 shadow">Loading...</div>
+        <div className="rounded-xl bg-white p-6 shadow">Loading...</div>
       </main>
     );
   }

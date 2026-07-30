@@ -164,7 +164,7 @@ export default function DiscussionsPage() {
   if (authLoading || !user) {
     return (
       <main className="min-h-screen bg-gray-100 p-10">
-        <div className="rounded-lg bg-white p-6 shadow">Loading...</div>
+        <div className="rounded-xl bg-white p-6 shadow">Loading...</div>
       </main>
     );
   }
@@ -347,11 +347,11 @@ export default function DiscussionsPage() {
       )}
 
       {loading && (
-        <div className="rounded-lg bg-white p-6 shadow">Loading discussions...</div>
+        <div className="rounded-xl bg-white p-6 shadow">Loading discussions...</div>
       )}
 
       {!loading && !errorMessage && threads.length === 0 && (
-        <div className="rounded-lg bg-white p-6 shadow text-gray-500">
+        <div className="rounded-xl bg-white p-6 shadow text-gray-500">
           No discussions here yet. Start one above.
         </div>
       )}

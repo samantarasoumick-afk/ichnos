@@ -65,7 +65,7 @@ export default function PrivacyPage() {
   if (authLoading || !user) {
     return (
       <main className="min-h-screen bg-gray-100 p-10">
-        <div className="rounded-lg bg-white p-6 shadow">Loading...</div>
+        <div className="rounded-xl bg-white p-6 shadow">Loading...</div>
       </main>
     );
   }
