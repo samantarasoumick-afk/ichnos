@@ -7,6 +7,7 @@ import TopNav from "../../components/TopNav";
 import { useRequireAuth } from "../../hooks/useRequireAuth";
 import api from "../../services/api";
 import type { DataContract, Dataset } from "../../types/metadata";
+import { contractEvaluationBadgeClasses as evaluationBadgeClasses, contractStatusBadgeClasses as statusBadgeClasses } from "../../utils/badgeStyles";
 
 type StatusFilter = "ALL" | "ACTIVE" | "BREACHED" | "COMPLIANT" | "DRAFT" | "DEPRECATED";
 
@@ -18,18 +19,6 @@ const STATUS_FILTERS: { key: StatusFilter; label: string }[] = [
   { key: "DRAFT", label: "Draft" },
   { key: "DEPRECATED", label: "Deprecated" },
 ];
-
-function statusBadgeClasses(status: string) {
-  if (status === "ACTIVE") return "bg-blue-100 text-blue-700";
-  if (status === "DEPRECATED") return "bg-gray-100 text-gray-500";
-  return "bg-yellow-100 text-yellow-700"; // DRAFT
-}
-
-function evaluationBadgeClasses(status: string | null | undefined) {
-  if (status === "COMPLIANT") return "bg-green-100 text-green-700";
-  if (status === "BREACHED") return "bg-red-100 text-red-700";
-  return "bg-gray-100 text-gray-500"; // not yet evaluated
-}
 
 export default function ContractsPage() {
   const { user, loading: authLoading } = useRequireAuth();
@@ -139,7 +128,7 @@ export default function ContractsPage() {
   if (authLoading || !user) {
     return (
       <main className="min-h-screen bg-gray-100 p-10">
-        <div className="rounded-lg bg-white p-6 shadow">Loading...</div>
+        <div className="rounded-xl bg-white p-6 shadow">Loading...</div>
       </main>
     );
   }

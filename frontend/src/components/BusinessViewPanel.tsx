@@ -19,6 +19,7 @@ import type {
   Lineage,
   Risk,
 } from "../types/metadata";
+import { contractEvaluationBadgeClasses as contractBadgeClasses, riskLevelBadgeClasses } from "../utils/badgeStyles";
 
 type Props = {
   dataset: Dataset;
@@ -30,19 +31,6 @@ type Props = {
   allDatasets: Dataset[];
   canEdit: boolean;
 };
-
-function contractBadgeClasses(status: string | undefined) {
-  if (status === "COMPLIANT") return "bg-green-100 text-green-700";
-  if (status === "BREACHED") return "bg-red-100 text-red-700";
-  if (status === "PENDING_EVALUATION") return "bg-yellow-100 text-yellow-700";
-  return "bg-gray-100 text-gray-500"; // NO_CONTRACT
-}
-
-function riskLevelBadgeClasses(level: string) {
-  if (level === "HIGH") return "bg-red-100 text-red-700";
-  if (level === "MEDIUM") return "bg-yellow-100 text-yellow-700";
-  return "bg-green-100 text-green-700";
-}
 
 export default function BusinessViewPanel({
   dataset,

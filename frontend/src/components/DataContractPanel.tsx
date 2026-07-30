@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 
 import api from "../services/api";
 import type { ContractColumnExpectation, DataContract, UpstreamContractBreach } from "../types/metadata";
+import { contractEvaluationBadgeClasses as evaluationBadgeClasses, contractStatusBadgeClasses as statusBadgeClasses } from "../utils/badgeStyles";
 
 type Props = {
   datasetId: string;
@@ -16,18 +17,6 @@ const EMPTY_ROW: ContractColumnExpectation = {
   nullable: undefined,
   required: true,
 };
-
-function statusBadgeClasses(status: string) {
-  if (status === "ACTIVE") return "bg-blue-100 text-blue-700";
-  if (status === "DEPRECATED") return "bg-gray-100 text-gray-500";
-  return "bg-yellow-100 text-yellow-700"; // DRAFT
-}
-
-function evaluationBadgeClasses(status: string | null | undefined) {
-  if (status === "COMPLIANT") return "bg-green-100 text-green-700";
-  if (status === "BREACHED") return "bg-red-100 text-red-700";
-  return "bg-gray-100 text-gray-500"; // not yet evaluated
-}
 
 export default function DataContractPanel({ datasetId, canEdit }: Props) {
   const [contracts, setContracts] = useState<DataContract[]>([]);

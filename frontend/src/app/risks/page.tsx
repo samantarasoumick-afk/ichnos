@@ -6,6 +6,11 @@ import { useEffect, useState } from "react";
 import TopNav from "../../components/TopNav";
 import { useRequireAuth } from "../../hooks/useRequireAuth";
 import api from "../../services/api";
+import {
+  controlStatusBadgeClasses,
+  riskLevelBadgeClasses as levelBadgeClasses,
+  riskStatusBadgeClasses,
+} from "../../utils/badgeStyles";
 import type {
   BusinessProcess,
   Control,
@@ -40,25 +45,6 @@ const RISK_STATUSES: RiskStatus[] = ["OPEN", "MITIGATED", "ACCEPTED", "CLOSED"];
 const CONTROL_TYPES: ControlType[] = ["PREVENTIVE", "DETECTIVE", "CORRECTIVE"];
 
 const CONTROL_STATUSES: ControlStatus[] = ["NOT_TESTED", "EFFECTIVE", "INEFFECTIVE"];
-
-function levelBadgeClasses(level: RiskLevel) {
-  if (level === "HIGH") return "bg-red-100 text-red-700";
-  if (level === "MEDIUM") return "bg-yellow-100 text-yellow-700";
-  return "bg-green-100 text-green-700";
-}
-
-function riskStatusBadgeClasses(status: RiskStatus) {
-  if (status === "OPEN") return "bg-orange-100 text-orange-700";
-  if (status === "MITIGATED") return "bg-blue-100 text-blue-700";
-  if (status === "ACCEPTED") return "bg-purple-100 text-purple-700";
-  return "bg-gray-100 text-gray-600"; // CLOSED
-}
-
-function controlStatusBadgeClasses(status: ControlStatus) {
-  if (status === "EFFECTIVE") return "bg-green-100 text-green-700";
-  if (status === "INEFFECTIVE") return "bg-red-100 text-red-700";
-  return "bg-gray-100 text-gray-600"; // NOT_TESTED
-}
 
 const EMPTY_NEW_RISK: RiskCreate = {
   title: "",
@@ -302,7 +288,7 @@ export default function RisksPage() {
   if (authLoading || !user) {
     return (
       <main className="min-h-screen bg-gray-100 p-10">
-        <div className="rounded-lg bg-white p-6 shadow">Loading...</div>
+        <div className="rounded-xl bg-white p-6 shadow">Loading...</div>
       </main>
     );
   }
