@@ -40,6 +40,15 @@ class DatasetResponse(BaseModel):
     contract_status: Optional[str] = None
     pending_certification_request_id: Optional[UUID] = None
 
+    # Privacy/governance policy fields - already computed on the model
+    # (see app/models/dataset.py) but not previously surfaced over the
+    # API; additive, so no existing consumer is affected.
+    purpose: Optional[str] = None
+    consent_status: Optional[str] = None
+    retention_period_days: Optional[int] = None
+    retention_status: Optional[str] = None
+    privacy_score: Optional[int] = 0
+
     view_count: Optional[int] = 0
     distinct_viewer_count: Optional[int] = 0
     last_viewed_at: Optional[datetime] = None

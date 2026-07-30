@@ -81,6 +81,7 @@ from app.api.query_log import router as query_log_router
 from app.api.platform import router as platform_router
 from app.api.marketing import router as marketing_router
 from app.api.billing import router as billing_router
+from app.api.ecosystem import router as ecosystem_router
 from app.api.columns import (
     router as columns_router
 )
@@ -210,6 +211,7 @@ app.include_router(query_log_router)
 app.include_router(platform_router)
 app.include_router(marketing_router)
 app.include_router(billing_router)
+app.include_router(ecosystem_router)
 
 # CORS_ALLOWED_ORIGINS is a comma-separated list of exact origins,
 # e.g. "https://app.example.com,http://localhost:3000". Wildcard
