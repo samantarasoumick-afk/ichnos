@@ -572,6 +572,7 @@ export type RiskDetail = Risk & {
 
 export type SearchResultType =
   | "dataset"
+  | "column"
   | "glossary_term"
   | "process"
   | "risk"

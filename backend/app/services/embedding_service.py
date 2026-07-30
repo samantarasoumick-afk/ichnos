@@ -7,7 +7,7 @@ configured and reachable.
 
 semantic_search() below is a drop-in replacement for
 catalog_search_service.semantic_search(): identical signature, same
-CorpusDocument/SearchResult return shape, same six-doc-type corpus
+CorpusDocument/SearchResult return shape, same seven-doc-type corpus
 (build_corpus() is reused as-is, unchanged). Every existing caller
 (assistant_service.py's Ask retrieval, api/search.py's global search
 bar) just imports semantic_search from here instead - nothing else

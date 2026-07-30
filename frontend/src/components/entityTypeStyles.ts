@@ -5,6 +5,7 @@ import type { SearchResultType } from "../types/metadata";
 // like the same visual language, not drift independently.
 export const ENTITY_TYPE_LABELS: Record<SearchResultType, string> = {
   dataset: "Dataset",
+  column: "Column",
   glossary_term: "Glossary",
   process: "Process",
   risk: "Risk",
@@ -14,6 +15,7 @@ export const ENTITY_TYPE_LABELS: Record<SearchResultType, string> = {
 
 export const ENTITY_TYPE_BADGE_CLASSES: Record<SearchResultType, string> = {
   dataset: "bg-blue-100 text-blue-700",
+  column: "bg-sky-100 text-sky-700",
   glossary_term: "bg-purple-100 text-purple-700",
   process: "bg-emerald-100 text-emerald-700",
   risk: "bg-red-100 text-red-700",

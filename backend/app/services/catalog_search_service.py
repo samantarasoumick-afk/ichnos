@@ -11,11 +11,18 @@ the app's global, cross-entity search bar.
 
 Covers every entity type a user might plausibly be looking for by
 name/description rather than just datasets + glossary terms:
-BusinessProcess, Risk, Control, and GovernanceThread (discussions) are
-all included in the corpus too. DataSource (connections) and User
-(team members) are deliberately left out - searching for "the
-Postgres connection" or "the person named Priya" isn't really what
-this bar is for, and the assistant never needed them either.
+BusinessProcess, Risk, Control, GovernanceThread (discussions), and
+individual DatasetColumns are all included in the corpus too.
+DataSource (connections) and User (team members) are deliberately
+left out - searching for "the Postgres connection" or "the person
+named Priya" isn't really what this bar is for, and the assistant
+never needed them either.
+
+Column documents deliberately never index DatasetColumn.sample_values
+- that field can hold real (unmasked) example values for PII/sensitive
+columns, and a search snippet is not a context where that data's
+existing masking/role restrictions get enforced. Name, description,
+and classification are searchable; actual data values are not.
 
 Computed fresh per request rather than cached/indexed - a few
 thousand rows across all these tables fit comfortably in that budget.
@@ -32,6 +39,7 @@ from sklearn.metrics.pairwise import cosine_similarity
 from sqlalchemy.orm import Session
 
 from app.models.business_process import BusinessProcess
+from app.models.column import DatasetColumn
 from app.models.control import Control
 from app.models.dataset import Dataset
 from app.models.governance import BusinessGlossaryTerm
@@ -41,6 +49,7 @@ from app.models.risk import Risk
 
 DocType = Literal[
     "dataset",
+    "column",
     "glossary_term",
     "process",
     "risk",
@@ -88,6 +97,29 @@ def _dataset_document(dataset: Dataset) -> CorpusDocument:
         label=f"{dataset.schema_name}.{dataset.name}",
         text=" ".join(part for part in text_parts if part),
         ref=dataset,
+    )
+
+
+def _column_document(column: DatasetColumn) -> CorpusDocument:
+
+    dataset = column.dataset
+
+    text_parts = [
+        column.name,
+        dataset.name if dataset else None,
+        dataset.schema_name if dataset else None,
+        column.description,
+        column.classification,
+        column.dpdp_category,
+        column.data_type,
+    ]
+
+    return CorpusDocument(
+        doc_type="column",
+        id=column.id,
+        label=column.name,
+        text=" ".join(part for part in text_parts if part),
+        ref=column,
     )
 
 
@@ -182,6 +214,15 @@ def build_corpus(
             .all()
         )
         documents += [_dataset_document(d) for d in datasets]
+
+    if wants("column"):
+        columns = (
+            db.query(DatasetColumn)
+            .join(Dataset, DatasetColumn.dataset_id == Dataset.id)
+            .filter(Dataset.organization_id == organization_id)
+            .all()
+        )
+        documents += [_column_document(c) for c in columns]
 
     if wants("glossary_term"):
         terms = (
@@ -283,6 +324,15 @@ def describe_document(document: CorpusDocument) -> tuple[str, str]:
 
     if document.doc_type == "dataset":
         return ref.schema_name, f"/datasets/{document.id}"
+
+    if document.doc_type == "column":
+        dataset = ref.dataset
+        label = f"{dataset.schema_name}.{dataset.name}" if dataset else "Unknown dataset"
+        subtitle = f"Column · {label}"
+        if ref.classification and ref.classification.upper() not in ("NONE", ""):
+            subtitle += f" · {ref.classification}"
+        url = f"/datasets/{dataset.id}?tab=columns" if dataset else "/"
+        return subtitle, url
 
     if document.doc_type == "glossary_term":
         subtitle = "Glossary term"
