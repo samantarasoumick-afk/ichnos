@@ -13,6 +13,16 @@ type NavItem = {
   label: string;
 };
 
+// Ecosystem/Lineage/Data Quality are grouped the same way Governance's
+// six items already are - three flat top-level links read as three
+// competing destinations, but as a group they're really one answer to
+// "where does my data live and can I trust it."
+const CATALOG_ITEMS: NavItem[] = [
+  { href: "/ecosystem", label: "Ecosystem" },
+  { href: "/lineage", label: "Lineage" },
+  { href: "/data-quality", label: "Data Quality" },
+];
+
 const GOVERNANCE_ITEMS: NavItem[] = [
   { href: "/governance", label: "Overview" },
   { href: "/glossary", label: "Glossary" },
@@ -111,17 +121,7 @@ export default function TopNav() {
           <DatFeLogo size={26} />
         </Link>
 
-        <Link href="/ecosystem" className={linkClasses("/ecosystem")}>
-          Ecosystem
-        </Link>
-
-        <Link href="/lineage" className={linkClasses("/lineage")}>
-          Lineage
-        </Link>
-
-        <Link href="/data-quality" className={linkClasses("/data-quality")}>
-          Data Quality
-        </Link>
+        <NavDropdown label="Catalog" items={CATALOG_ITEMS} pathname={pathname} />
 
         <NavDropdown label="Governance" items={GOVERNANCE_ITEMS} pathname={pathname} />
 
