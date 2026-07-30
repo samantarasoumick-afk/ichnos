@@ -47,6 +47,7 @@ from app.models.control import Control
 from app.models.risk import Risk, RiskDatasetLink, RiskProcessLink, RiskControlLink
 from app.models.magic_login_token import MagicLoginToken
 from app.models.marketing_event import MarketingEvent
+from app.models.onboarding import OnboardingMilestoneEvent
 
 
 
