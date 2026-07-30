@@ -4,15 +4,12 @@ import { useEffect, useMemo, useState } from "react";
 
 import EcosystemGraph, { type EcosystemSelection } from "../../components/EcosystemGraph";
 import EcosystemNodePanel from "../../components/EcosystemNodePanel";
-import OnboardingProgressWidget from "../../components/OnboardingProgressWidget";
 import TopNav from "../../components/TopNav";
 import { useRequireAuth } from "../../hooks/useRequireAuth";
 import api from "../../services/api";
 import type {
   EcosystemDatasetNode,
   EcosystemGraph as EcosystemGraphData,
-  OnboardingMilestoneKey,
-  OnboardingProgress,
   SearchResponse,
   SearchResultItem,
 } from "../../types/metadata";
@@ -45,21 +42,6 @@ export default function EcosystemPage() {
   const [searchResults, setSearchResults] = useState<SearchResultItem[]>([]);
   const [searching, setSearching] = useState(false);
 
-  const [progress, setProgress] = useState<OnboardingProgress | null>(null);
-
-  // Fire-and-forget: recording an onboarding milestone should never
-  // block or interrupt whatever the person is actually doing on the
-  // map, and a failure here (network hiccup) isn't worth surfacing as
-  // an error - it just tries again the next time the same action happens.
-  async function recordMilestone(key: OnboardingMilestoneKey) {
-    try {
-      const response = await api.post<OnboardingProgress>(`/api/ecosystem/onboarding/milestones/${key}`);
-      setProgress(response.data);
-    } catch (error) {
-      console.error(error);
-    }
-  }
-
   useEffect(() => {
     if (!user) return;
 
@@ -68,7 +50,6 @@ export default function EcosystemPage() {
         setErrorMessage(null);
         const response = await api.get<EcosystemGraphData>("/api/ecosystem");
         setGraph(response.data);
-        recordMilestone("VIEWED_ECOSYSTEM_MAP");
       } catch (error) {
         console.error(error);
         setErrorMessage("Unable to load the ecosystem map. Please make sure the backend is running.");
@@ -77,17 +58,7 @@ export default function EcosystemPage() {
       }
     }
 
-    async function fetchProgress() {
-      try {
-        const response = await api.get<OnboardingProgress>("/api/ecosystem/onboarding/progress");
-        setProgress(response.data);
-      } catch (error) {
-        console.error(error);
-      }
-    }
-
     fetchGraph();
-    fetchProgress();
   }, [user]);
 
   function toggleExpand(sourceId: string) {
@@ -99,16 +70,8 @@ export default function EcosystemPage() {
     });
   }
 
-  // Shared by the graph's own node clicks and every "jump to this
-  // dataset" shortcut (search results, lineage-list rows in the
-  // panel) - wherever a source/dataset gets selected, the milestone
-  // for exploring that tier fires the same way.
   function applySelection(next: EcosystemSelection) {
     setSelection(next);
-    const tier = next.kind === "source" ? next.source.tier : next.dataset.tier;
-    if (tier === "FRONT_OFFICE") recordMilestone("EXPLORED_FRONT_OFFICE");
-    else if (tier === "MIDDLE_OFFICE") recordMilestone("EXPLORED_MIDDLE_OFFICE");
-    else if (tier === "BACK_OFFICE") recordMilestone("EXPLORED_BACK_OFFICE");
   }
 
   function selectDataset(dataset: EcosystemDatasetNode) {
@@ -148,7 +111,6 @@ export default function EcosystemPage() {
     try {
       const response = await api.get<SearchResponse>("/api/search", { params: { q: trimmed, limit: 6 } });
       setSearchResults(response.data.results);
-      recordMilestone("USED_SEMANTIC_SEARCH");
     } catch (error) {
       console.error(error);
       setSearchResults([]);
@@ -281,14 +243,12 @@ export default function EcosystemPage() {
               />
             </div>
             <div className="space-y-6">
-              <OnboardingProgressWidget progress={progress} />
               <EcosystemNodePanel
                 graph={graph}
                 selection={selection}
                 audience={audience}
                 onClose={() => setSelection(null)}
                 onSelectDataset={selectDataset}
-                onTrace={() => recordMilestone("TRACED_PROVENANCE")}
               />
             </div>
           </div>
