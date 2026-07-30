@@ -17,6 +17,10 @@ from app.services.demo_data_service import (
     clear_demo_data,
     seed_demo_data,
 )
+from app.services.guided_tour_service import (
+    UnknownTourScenarioError,
+    ensure_tour_step,
+)
 
 
 router = APIRouter(
@@ -76,6 +80,39 @@ def seed_demo(
         "message": "Demo data loaded successfully",
         **summary,
     }
+
+
+@router.post("/tour/{scenario_id}/step/{step_index}")
+def ensure_tour_step_data(
+    scenario_id: str,
+    step_index: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_role("admin", "steward"))
+):
+    """
+    Idempotently creates every piece of demo data a guided tour
+    scenario needs up through (and including) the given step - called
+    by the frontend tour stepper right before it navigates to that
+    step, so the target dataset/contract/discussion/etc. actually
+    exists by the time the page loads. Safe to call repeatedly
+    (advancing, going back, or re-visiting a step): see
+    guided_tour_service.py for why each step's data is idempotent.
+
+    Unlike POST /demo/seed, this does not require the organization to
+    be free of existing demo data - a guided tour can start from an
+    empty catalog, build up incrementally as steps are taken, or run
+    on top of an already-fully-seeded org (in which case every
+    checkpoint just finds its data already present).
+    """
+
+    try:
+        summary = ensure_tour_step(db, current_user, scenario_id, step_index)
+    except UnknownTourScenarioError as exc:
+        raise HTTPException(status_code=404, detail=str(exc))
+    except IndexError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+
+    return summary
 
 
 @router.post("/clear")

@@ -34,7 +34,16 @@ export default function DemoDataPanel() {
 
   }, []);
 
-  async function loadDemoData() {
+  // No bulk seed call here anymore - the picker decides what happens
+  // next. Picking a guided tour builds that scenario's data live, one
+  // step at a time (see TourContext's ensureStepData); only "explore
+  // on my own" still does the old one-shot bulk seed (see
+  // handleExploreOnMyOwn below).
+  function loadDemoData() {
+    setShowPicker(true);
+  }
+
+  async function exploreOnMyOwn() {
 
     try {
 
@@ -42,12 +51,8 @@ export default function DemoDataPanel() {
 
       await api.post("/api/demo/seed");
 
-      // No alert()/reload here - the picker modal is the next step,
-      // and either path out of it (pick a tour, or "explore on my
-      // own") is responsible for getting the catalog page's data
-      // fresh, see handleDismissPicker below and TourContext's
-      // same-route hard-navigation handling.
-      setShowPicker(true);
+      setShowPicker(false);
+      window.location.reload();
 
     } catch (error: unknown) {
 
@@ -104,15 +109,6 @@ export default function DemoDataPanel() {
     }
   }
 
-  // "Just explore on my own" out of the picker still needs the
-  // catalog page's already-fetched (now stale) dataset list refreshed
-  // - a full reload is the simplest reliable way, same as the
-  // original load/clear flows below.
-  function dismissPickerAndRefresh() {
-    setShowPicker(false);
-    window.location.reload();
-  }
-
   if (!status) {
     return null;
   }
@@ -133,11 +129,12 @@ export default function DemoDataPanel() {
                 "reporting, plus a vendor product feed whose data quality problem reaches a " +
                 "downstream report - lineage, data quality, contracts, risks & controls, " +
                 "privacy fields, team roles, and search activity all connected."
-              : "Load a full, connected sample estate to see every feature working " +
-                "together before bringing your own data - front office apps, a " +
-                "processing layer, and reporting, plus a vendor feed whose data quality " +
-                "problem you can trace end to end, with column-level lineage, data " +
-                "quality, contracts, a risk register, privacy fields, and a mixed-role " +
+              : "See every feature working together before bringing your own data - two " +
+                "guided stories that build themselves live as you walk through them, or " +
+                "load the full connected estate at once and explore on your own: front " +
+                "office apps, a processing layer, and reporting, plus a vendor feed whose " +
+                "data quality problem you can trace end to end, with column-level lineage, " +
+                "data quality, contracts, a risk register, privacy fields, and a mixed-role " +
                 "team roster all in motion."}
           </p>
         </div>
@@ -176,7 +173,9 @@ export default function DemoDataPanel() {
 
       <TourPickerModal
         open={showPicker}
-        onClose={status.demo_data_loaded ? () => setShowPicker(false) : dismissPickerAndRefresh}
+        onClose={() => setShowPicker(false)}
+        onExploreOnMyOwn={status.demo_data_loaded ? undefined : exploreOnMyOwn}
+        exploring={loading}
       />
     </>
   );

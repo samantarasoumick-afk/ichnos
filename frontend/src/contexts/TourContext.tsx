@@ -121,40 +121,68 @@ export function TourProvider({ children }: { children: React.ReactNode }) {
   const [isResolving, setIsResolving] = useState(false);
   const [resolveError, setResolveError] = useState<string | null>(null);
 
-  const resolveDatasetIndex = useCallback(async (): Promise<DatasetIndex> => {
-    if (datasetIndex) return datasetIndex;
+  // force=true bypasses the cache - needed after ensureStepData() below
+  // has just (possibly) created new datasets, since a memoized index
+  // from an earlier step wouldn't know about them yet.
+  const resolveDatasetIndex = useCallback(
+    async (force = false): Promise<DatasetIndex> => {
+      if (datasetIndex && !force) return datasetIndex;
 
-    setIsResolving(true);
-    setResolveError(null);
+      try {
+        const response = await api.get<Array<{ id: string; schema_name: string; name: string }>>(
+          "/api/datasets"
+        );
 
-    try {
-      const response = await api.get<Array<{ id: string; schema_name: string; name: string }>>(
-        "/api/datasets"
-      );
+        const index: DatasetIndex = {};
+        for (const d of response.data) {
+          index[datasetKey(d.schema_name, d.name)] = d.id;
+        }
 
-      const index: DatasetIndex = {};
-      for (const d of response.data) {
-        index[datasetKey(d.schema_name, d.name)] = d.id;
+        setDatasetIndex(index);
+        return index;
+      } catch {
+        setResolveError(
+          "Couldn't load the catalog to resolve this tour's datasets - is demo data still loaded?"
+        );
+        return {};
       }
+    },
+    [datasetIndex]
+  );
 
-      setDatasetIndex(index);
-      return index;
+  // Idempotently creates every piece of data this step (and its
+  // prerequisites) needs - see backend/app/services/guided_tour_service.py.
+  // Safe to call every time a step is reached, including re-visiting
+  // one via Back: each checkpoint no-ops if its data already exists.
+  const ensureStepData = useCallback(async (scenarioId: string, index: number): Promise<boolean> => {
+    try {
+      await api.post(`/api/demo/tour/${scenarioId}/step/${index}`);
+      return true;
     } catch {
       setResolveError(
-        "Couldn't load the catalog to resolve this tour's datasets - is demo data still loaded?"
+        "Couldn't create this step's data - if you're not an admin or steward, ask one to load " +
+          "the guided tour, or try again."
       );
-      return {};
-    } finally {
-      setIsResolving(false);
+      return false;
     }
-  }, [datasetIndex]);
+  }, []);
 
   const navigateToStep = useCallback(
     async (scenario: TourScenario, index: number) => {
       const step = scenario.steps[index];
       if (!step) return;
 
-      const index_ = await resolveDatasetIndex();
+      setIsResolving(true);
+      setResolveError(null);
+
+      const created = await ensureStepData(scenario.id, index);
+      if (!created) {
+        setIsResolving(false);
+        return;
+      }
+
+      const index_ = await resolveDatasetIndex(true);
+      setIsResolving(false);
       const url = buildStepUrl(step, index_);
 
       if (url) {
@@ -186,7 +214,7 @@ export function TourProvider({ children }: { children: React.ReactNode }) {
         );
       }
     },
-    [resolveDatasetIndex, router]
+    [ensureStepData, resolveDatasetIndex, router]
   );
 
   const startTour = useCallback(
