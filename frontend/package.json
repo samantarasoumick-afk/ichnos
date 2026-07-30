@@ -3,6 +3,9 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
+    "sync-static-pages": "node scripts/sync-static-pages.js",
+    "predev": "npm run sync-static-pages",
+    "prebuild": "npm run sync-static-pages",
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
