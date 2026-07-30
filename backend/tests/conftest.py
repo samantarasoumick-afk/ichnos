@@ -31,6 +31,19 @@ os.environ.setdefault("DEMO_SEED", "false")
 # turns it on for its own module only.
 os.environ.setdefault("RATE_LIMIT_ENABLED", "false")
 
+# app.main calls load_dotenv() at import time (below), which pulls in
+# backend/.env - including any real VOYAGE_API_KEY/ANTHROPIC_API_KEY a
+# developer has configured there for actually running the app.
+# load_dotenv() never overrides a variable that's already set, so
+# pinning these to "" here first means the test suite always exercises
+# the deterministic TF-IDF/keyword-matched fallback paths regardless
+# of what's in a developer's local .env - tests should never depend on
+# (or silently spend) a real external API key. Individual tests that
+# specifically want to exercise the real-key code path set their own
+# value via patch.dict(os.environ, ...), which does override this.
+os.environ.setdefault("VOYAGE_API_KEY", "")
+os.environ.setdefault("ANTHROPIC_API_KEY", "")
+
 if os.path.exists(_DB_PATH):
     os.remove(_DB_PATH)
 
