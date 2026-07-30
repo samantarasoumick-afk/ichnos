@@ -18,7 +18,7 @@ function datasetLabel(dataset: Dataset) {
 }
 
 export default function LineagePage() {
-  const { user, loading: authLoading } = useRequireAuth();
+  const { user, loading: authLoading, effectiveRole } = useRequireAuth();
 
   const [datasets, setDatasets] = useState<Dataset[]>([]);
   const [lineage, setLineage] = useState<Lineage[]>([]);
@@ -136,7 +136,7 @@ export default function LineagePage() {
     );
   }
 
-  const canEdit = user.role === "admin" || user.role === "steward";
+  const canEdit = effectiveRole === "admin" || effectiveRole === "steward";
 
   return (
     <main className="min-h-screen bg-gray-100 p-10">

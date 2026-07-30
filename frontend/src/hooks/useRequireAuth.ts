@@ -13,7 +13,7 @@ import { useAuth } from "../contexts/AuthContext";
  * the protected content.
  */
 export function useRequireAuth() {
-  const { user, loading } = useAuth();
+  const { user, loading, effectiveRole } = useAuth();
   const router = useRouter();
 
   useEffect(() => {
@@ -22,5 +22,5 @@ export function useRequireAuth() {
     }
   }, [loading, user, router]);
 
-  return { user, loading };
+  return { user, loading, effectiveRole };
 }

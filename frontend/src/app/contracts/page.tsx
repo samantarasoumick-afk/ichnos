@@ -21,7 +21,7 @@ const STATUS_FILTERS: { key: StatusFilter; label: string }[] = [
 ];
 
 export default function ContractsPage() {
-  const { user, loading: authLoading } = useRequireAuth();
+  const { user, loading: authLoading, effectiveRole } = useRequireAuth();
 
   const [contracts, setContracts] = useState<DataContract[]>([]);
   const [datasets, setDatasets] = useState<Dataset[]>([]);
@@ -32,7 +32,7 @@ export default function ContractsPage() {
   const [statusFilter, setStatusFilter] = useState<StatusFilter>("ALL");
   const [busyContractId, setBusyContractId] = useState<string | null>(null);
 
-  const canEdit = user?.role === "admin" || user?.role === "steward" || user?.role === "data_owner";
+  const canEdit = effectiveRole === "admin" || effectiveRole === "steward" || effectiveRole === "data_owner";
 
   async function loadContracts() {
     try {

@@ -22,13 +22,13 @@ const EMPTY_NEW_TERM: BusinessGlossaryTermCreate = {
 };
 
 export default function GlossaryPage() {
-  const { user, loading: authLoading } = useRequireAuth();
+  const { user, loading: authLoading, effectiveRole } = useRequireAuth();
 
   const [terms, setTerms] = useState<BusinessGlossaryTerm[]>([]);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [search, setSearch] = useState("");
 
-  const canEditGlossary = user?.role === "admin" || user?.role === "steward";
+  const canEditGlossary = effectiveRole === "admin" || effectiveRole === "steward";
 
   const [showNewTermForm, setShowNewTermForm] = useState(false);
   const [newTerm, setNewTerm] = useState<BusinessGlossaryTermCreate>(EMPTY_NEW_TERM);

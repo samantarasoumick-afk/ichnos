@@ -61,7 +61,7 @@ const EMPTY_NEW_CONTROL: ControlCreate = {
 };
 
 export default function RisksPage() {
-  const { user, loading: authLoading } = useRequireAuth();
+  const { user, loading: authLoading, effectiveRole } = useRequireAuth();
 
   const [tab, setTab] = useState<Tab>("risks");
   const [risks, setRisks] = useState<Risk[]>([]);
@@ -71,7 +71,7 @@ export default function RisksPage() {
   const [teamMembers, setTeamMembers] = useState<TeamMember[]>([]);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
-  const canEdit = user?.role === "admin" || user?.role === "steward";
+  const canEdit = effectiveRole === "admin" || effectiveRole === "steward";
 
   const [showNewRiskForm, setShowNewRiskForm] = useState(false);
   const [newRisk, setNewRisk] = useState<RiskCreate>(EMPTY_NEW_RISK);

@@ -16,7 +16,7 @@ function formatDate(iso?: string) {
 }
 
 export default function DiscussionThreadPage() {
-  const { user, loading: authLoading } = useRequireAuth();
+  const { user, loading: authLoading, effectiveRole } = useRequireAuth();
   const params = useParams<{ id: string }>();
   const threadId = params.id;
 
@@ -99,7 +99,7 @@ export default function DiscussionThreadPage() {
   const canResolve =
     !!thread &&
     thread.status === "OPEN" &&
-    (thread.created_by === user.id || user.role === "admin" || user.role === "steward");
+    (thread.created_by === user.id || effectiveRole === "admin" || effectiveRole === "steward");
 
   return (
     <main className="min-h-screen bg-gray-100 p-10">

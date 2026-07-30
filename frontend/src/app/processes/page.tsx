@@ -39,12 +39,12 @@ function groupDatasetsByCategory(datasets: BusinessProcessDatasetSummary[]) {
 }
 
 export default function ProcessesPage() {
-  const { user, loading: authLoading } = useRequireAuth();
+  const { user, loading: authLoading, effectiveRole } = useRequireAuth();
 
   const [processes, setProcesses] = useState<BusinessProcess[]>([]);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
-  const canEditProcesses = user?.role === "admin" || user?.role === "steward";
+  const canEditProcesses = effectiveRole === "admin" || effectiveRole === "steward";
 
   const [showNewProcessForm, setShowNewProcessForm] = useState(false);
   const [newProcess, setNewProcess] = useState<BusinessProcessCreate>(EMPTY_NEW_PROCESS);

@@ -36,7 +36,7 @@ type TabKey = "overview" | "business" | "columns" | "lineage" | "governance" | "
 
 export default function DatasetPage() {
   const { id } = useParams() as { id?: string };
-  const { user, loading: authLoading } = useRequireAuth();
+  const { user, loading: authLoading, effectiveRole } = useRequireAuth();
 
   // Deep-linkable from the guided tour (?tab=governance) - same
   // window.location.search read pattern used elsewhere (DiscussionsPage,
@@ -77,11 +77,11 @@ export default function DatasetPage() {
   const [savingColumnId, setSavingColumnId] = useState<string | null>(null);
   const [savingMaskColumnId, setSavingMaskColumnId] = useState<string | null>(null);
 
-  const canEditGovernance = user?.role === "admin" || user?.role === "steward";
+  const canEditGovernance = effectiveRole === "admin" || effectiveRole === "steward";
   // Masking is deliberately narrower than description-editing: it's a
   // Data Owner/admin control, not a steward one - stewards document
   // data, Data Owners control who's allowed to see it.
-  const canMaskColumns = user?.role === "admin" || user?.role === "data_owner";
+  const canMaskColumns = effectiveRole === "admin" || effectiveRole === "data_owner";
 
   function toggleColumnExpanded(column: DatasetColumn) {
     if (expandedColumnId === column.id) {
@@ -1270,7 +1270,7 @@ export default function DatasetPage() {
             certification={dataset.certification}
             pendingRequestId={dataset.pending_certification_request_id}
             canRequest={canEditGovernance}
-            canApprove={user?.role === "admin" || user?.role === "data_owner"}
+            canApprove={effectiveRole === "admin" || effectiveRole === "data_owner"}
           />
 
           <DataContractPanel datasetId={dataset.id} canEdit={canEditGovernance} />

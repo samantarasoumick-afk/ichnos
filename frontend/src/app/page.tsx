@@ -39,7 +39,7 @@ function StatChip({ label, value }: { label: string; value: string | number }) {
 
 export default function Home() {
 
-  const { user, loading: authLoading } = useAuth();
+  const { user, loading: authLoading, effectiveRole } = useAuth();
 
   const [sources, setSources] = useState<Source[]>([]);
 
@@ -77,7 +77,7 @@ export default function Home() {
 
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
-  const canManageSources = user?.role !== "viewer";
+  const canManageSources = effectiveRole !== "viewer";
 
   // Role-differentiated landing content: the backend has enforced
   // these roles for a while (RBAC on every mutating endpoint), but
@@ -86,10 +86,13 @@ export default function Home() {
   // in every capacity, same convention as require_role() throughout
   // the backend) - Data Owner and Steward each get the queue that
   // matches what they're actually here to do, Viewer gets a lighter
-  // page since they can't act on any of it anyway.
-  const isDataOwner = user?.role === "admin" || user?.role === "data_owner";
-  const isSteward = user?.role === "admin" || user?.role === "steward";
-  const isViewerOnly = user?.role === "viewer";
+  // page since they can't act on any of it anyway. Driven by
+  // effectiveRole rather than user.role so an Admin previewing another
+  // role (see TopNav's "Preview as") sees this page the same way that
+  // role would.
+  const isDataOwner = effectiveRole === "admin" || effectiveRole === "data_owner";
+  const isSteward = effectiveRole === "admin" || effectiveRole === "steward";
+  const isViewerOnly = effectiveRole === "viewer";
 
   // Not logged in: send the visitor to the full marketing site
   // (frontend/public/site.html) instead of forcing straight to /login -

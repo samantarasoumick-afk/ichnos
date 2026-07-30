@@ -22,7 +22,7 @@ const EMPTY_INVITE: TeamMemberInvite = {
 };
 
 export default function TeamPage() {
-  const { user, loading: authLoading } = useRequireAuth();
+  const { user, loading: authLoading, effectiveRole } = useRequireAuth();
   const { user: currentUser } = useAuth();
 
   const [members, setMembers] = useState<TeamMember[]>([]);
@@ -38,7 +38,7 @@ export default function TeamPage() {
   const [savingId, setSavingId] = useState<string | null>(null);
   const [rowError, setRowError] = useState<string | null>(null);
 
-  const isAdmin = user?.role === "admin";
+  const isAdmin = effectiveRole === "admin";
 
   useEffect(() => {
     if (!user) return;

@@ -5,6 +5,7 @@ import { usePathname } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 
 import { useAuth } from "../contexts/AuthContext";
+import type { UserRole } from "../types/metadata";
 import { DatFeLogo } from "./DatFeLogo";
 import GlobalSearch from "./GlobalSearch";
 
@@ -12,6 +13,17 @@ type NavItem = {
   href: string;
   label: string;
 };
+
+// Admin-only "view as" - lets an admin see the app the way each other
+// role would, without changing their real account. "viewer" is labeled
+// Audience View here since that's the term non-technical stakeholders
+// (the actual audience for a Viewer seat) use for it.
+const PREVIEW_ROLE_OPTIONS: { value: UserRole; label: string }[] = [
+  { value: "admin", label: "Admin View" },
+  { value: "steward", label: "Steward View" },
+  { value: "data_owner", label: "Owner View" },
+  { value: "viewer", label: "Audience View" },
+];
 
 // Ecosystem/Lineage/Data Quality are grouped the same way Governance's
 // six items already are - three flat top-level links read as three
@@ -106,7 +118,7 @@ function NavDropdown({
 }
 
 export default function TopNav() {
-  const { user, logout } = useAuth();
+  const { user, logout, effectiveRole, isPreviewing, setPreviewRole } = useAuth();
   const pathname = usePathname() ?? "";
 
   function linkClasses(href: string) {
@@ -115,6 +127,22 @@ export default function TopNav() {
   }
 
   return (
+    <>
+    {isPreviewing && (
+      <div className="mb-3 flex items-center justify-between rounded-xl border border-amber-300 bg-amber-50 px-4 py-2 text-sm text-amber-800">
+        <span>
+          Previewing as <strong>{PREVIEW_ROLE_OPTIONS.find((o) => o.value === effectiveRole)?.label}</strong> - this is
+          how the app looks to that role. Your real Admin account and permissions are unchanged.
+        </span>
+        <button
+          type="button"
+          onClick={() => setPreviewRole(null)}
+          className="ml-4 shrink-0 rounded-lg border border-amber-300 bg-white px-3 py-1 text-xs font-medium hover:bg-amber-100"
+        >
+          Exit preview
+        </button>
+      </div>
+    )}
     <div className="mb-6 flex flex-wrap items-center justify-between gap-3 rounded-xl bg-white px-5 py-3 shadow">
       <div className="flex items-center gap-5">
         <Link href="/">
@@ -135,7 +163,7 @@ export default function TopNav() {
 
         <NavDropdown
           label="Admin"
-          items={user?.role === "admin" ? [...ADMIN_ITEMS, ...ADMIN_ONLY_ITEMS] : ADMIN_ITEMS}
+          items={effectiveRole === "admin" ? [...ADMIN_ITEMS, ...ADMIN_ONLY_ITEMS] : ADMIN_ITEMS}
           pathname={pathname}
         />
 
@@ -160,9 +188,36 @@ export default function TopNav() {
           <span>
             {user.organization_name} &middot; {user.email}
           </span>
-          <span className="rounded-full bg-gray-100 px-2 py-0.5 text-xs uppercase text-gray-700">
-            {user.role.replace("_", " ")}
+
+          {user.role === "admin" && (
+            <select
+              value={effectiveRole ?? "admin"}
+              onChange={(event) => {
+                const next = event.target.value as UserRole;
+                setPreviewRole(next === "admin" ? null : next);
+              }}
+              title="Preview the app as a different role - your real Admin account and permissions are unchanged."
+              className={`rounded-lg border px-2 py-1 text-xs ${
+                isPreviewing ? "border-amber-400 bg-amber-50 text-amber-800" : "text-gray-600"
+              }`}
+            >
+              {PREVIEW_ROLE_OPTIONS.map((option) => (
+                <option key={option.value} value={option.value}>
+                  {option.label}
+                </option>
+              ))}
+            </select>
+          )}
+
+          <span
+            className={`rounded-full px-2 py-0.5 text-xs uppercase ${
+              isPreviewing ? "bg-amber-100 text-amber-800" : "bg-gray-100 text-gray-700"
+            }`}
+          >
+            {(effectiveRole ?? user.role).replace("_", " ")}
+            {isPreviewing ? " · preview" : ""}
           </span>
+
           <button
             onClick={logout}
             className="rounded-lg border px-3 py-1.5 text-sm hover:bg-gray-50"
@@ -172,5 +227,6 @@ export default function TopNav() {
         </div>
       )}
     </div>
+    </>
   );
 }

@@ -11,7 +11,7 @@ import api from "../../services/api";
 import type { Dataset, GovernanceOverview } from "../../types/metadata";
 
 export default function GovernancePage() {
-  const { user, loading: authLoading } = useRequireAuth();
+  const { user, loading: authLoading, effectiveRole } = useRequireAuth();
 
   const [overview, setOverview] = useState<GovernanceOverview | null>(null);
   const [scorecards, setScorecards] = useState<Dataset[]>([]);
@@ -75,7 +75,7 @@ export default function GovernancePage() {
 
       <CertificationQueue
         datasets={scorecards}
-        canReview={user.role === "admin" || user.role === "data_owner"}
+        canReview={effectiveRole === "admin" || effectiveRole === "data_owner"}
       />
 
       <div className="mb-8 grid grid-cols-1 gap-6 md:grid-cols-3 xl:grid-cols-6">

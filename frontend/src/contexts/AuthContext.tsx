@@ -10,6 +10,7 @@ import {
 import { useRouter } from "next/navigation";
 
 import api, { TOKEN_KEY } from "../services/api";
+import type { UserRole } from "../types/metadata";
 
 export type CurrentUser = {
   id: string;
@@ -41,6 +42,18 @@ type AuthContextValue = {
   loginWithMagicToken: (token: string) => Promise<void>;
   loginWithGithubCode: (code: string, state: string) => Promise<void>;
   logout: () => void;
+  // "Preview as" - lets an actual Admin see the app the way a Steward,
+  // Data Owner, or Viewer would, without touching their real account
+  // role. Purely a frontend display override: every mutating request
+  // still goes through the backend under the real account, which
+  // enforces the real role regardless of what's being previewed here.
+  // previewRole only ever takes effect when the real user is an admin
+  // (setPreviewRole no-ops otherwise) - effectiveRole is what every
+  // role-gated bit of UI in the app should read instead of user.role.
+  previewRole: UserRole | null;
+  setPreviewRole: (role: UserRole | null) => void;
+  effectiveRole: UserRole | null;
+  isPreviewing: boolean;
 };
 
 const AuthContext = createContext<AuthContextValue | undefined>(undefined);
@@ -56,7 +69,27 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     if (typeof window === "undefined") return false;
     return Boolean(window.localStorage.getItem(TOKEN_KEY));
   });
+  const [previewRole, setPreviewRoleState] = useState<UserRole | null>(null);
   const router = useRouter();
+
+  // No effect needed to guard a stale previewRole after the real
+  // account stops being admin (role downgrade, different account) -
+  // effectiveRole below already ignores previewRole unless
+  // user?.role === "admin", so a stale value in memory here never
+  // actually takes effect anywhere; it just gets cleared for real on
+  // the next logout() or setPreviewRole(null) call.
+  const setPreviewRole = useCallback(
+    (role: UserRole | null) => {
+      if (user?.role !== "admin") return;
+      setPreviewRoleState(role);
+    },
+    [user]
+  );
+
+  const effectiveRole: UserRole | null =
+    user?.role === "admin" && previewRole ? previewRole : (user?.role as UserRole | undefined) ?? null;
+
+  const isPreviewing = user?.role === "admin" && previewRole !== null && previewRole !== "admin";
 
   // Used by login()/register() after they already know a fresh token
   // exists - doesn't touch `loading`, since by that point the initial
@@ -170,6 +203,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   function logout() {
     window.localStorage.removeItem(TOKEN_KEY);
     setUser(null);
+    setPreviewRoleState(null);
     router.push("/login");
   }
 
@@ -183,6 +217,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         loginWithMagicToken,
         loginWithGithubCode,
         logout,
+        previewRole,
+        setPreviewRole,
+        effectiveRole,
+        isPreviewing,
       }}
     >
       {children}
