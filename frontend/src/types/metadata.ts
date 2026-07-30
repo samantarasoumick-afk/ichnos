@@ -723,3 +723,69 @@ export type BillingStatus = {
   stripe_configured: boolean;
   entitlements: BillingEntitlementsSummary;
 };
+
+// --- Ecosystem View ---
+// A new-analyst-onboarding map of the whole data estate: front office
+// (where data originates) through middle office (processing/modeling)
+// to back office (reporting). Tiers are computed server-side purely
+// from real DatasetLineage topology - see backend/app/services/
+// ecosystem_service.py for the derivation.
+
+export type EcosystemTier = "FRONT_OFFICE" | "MIDDLE_OFFICE" | "BACK_OFFICE" | "STANDALONE" | "MIXED";
+
+export type EcosystemSourceNode = {
+  id: string;
+  name: string;
+  type: string;
+  tier: EcosystemTier;
+  dataset_count: number;
+  total_columns: number;
+  pii_columns: number;
+  worst_governance_status: string | null;
+  dataset_ids: string[];
+};
+
+export type EcosystemDatasetNode = {
+  id: string;
+  source_id: string;
+  name: string;
+  schema_name: string;
+  tier: Exclude<EcosystemTier, "MIXED">;
+  owner?: string | null;
+  steward?: string | null;
+  domain?: string | null;
+  certification?: string | null;
+  system_role?: SystemRole | null;
+  data_category?: DataCategory | null;
+  sensitivity_score?: SensitivityScore;
+  governance_status?: string | null;
+  governance_score?: number;
+  total_columns?: number;
+  pii_columns?: number;
+  quality_score?: number;
+  freshness_status?: string | null;
+  contract_status?: ContractStatus | null;
+  purpose?: string | null;
+  consent_status?: ConsentStatus | null;
+  retention_status?: RetentionStatus | null;
+  privacy_score?: number;
+};
+
+export type EcosystemDatasetEdge = {
+  id: string;
+  upstream_dataset_id: string;
+  downstream_dataset_id: string;
+  transformation_type?: string | null;
+};
+
+export type EcosystemSourceEdge = {
+  upstream_source_id: string;
+  downstream_source_id: string;
+};
+
+export type EcosystemGraph = {
+  sources: EcosystemSourceNode[];
+  source_edges: EcosystemSourceEdge[];
+  datasets: EcosystemDatasetNode[];
+  edges: EcosystemDatasetEdge[];
+};

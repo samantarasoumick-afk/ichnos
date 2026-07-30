@@ -110,6 +110,10 @@ export default function TopNav() {
           <DataFeLogo size={26} />
         </Link>
 
+        <Link href="/ecosystem" className={linkClasses("/ecosystem")}>
+          Ecosystem
+        </Link>
+
         <Link href="/lineage" className={linkClasses("/lineage")}>
           Lineage
         </Link>
