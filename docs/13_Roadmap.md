@@ -1,7 +1,7 @@
 # Roadmap
 
-Last revised: 2026-07-28. Everything under "Delivered" is built and
-covered by the backend test suite (425 passing tests as of this
+Last revised: 2026-07-30. Everything under "Delivered" is built and
+covered by the backend test suite (432 passing tests as of this
 revision) and the frontend's own Jest suite (57 tests across 9 files)
 plus typecheck/lint. Everything under Phases 1-3 is
 what stands between here and a real rollout - see the verdict at the
@@ -56,20 +56,22 @@ dashboard, compliance report export.
 (admin, steward, data_owner, viewer); JWT auth (password, magic-link,
 and GitHub OAuth) with login lockout; credentials encrypted at rest;
 a global cross-entity search bar in the top nav (datasets, glossary
-terms, processes, risks, controls, and discussion threads, ranked by
-the same local TF-IDF retrieval the NL Q&A assistant uses - no
-external API call), plus an "@" mention picker on both the search bar
-and the Ask page for referencing a specific entity by exact name
-instead of relying on keyword matching; every Ask question and search
-query is logged with a matched/unmatched signal, rolling up into an
-admin-only "Search Insights" report (top unanswered questions ranked
-by frequency, plus overall query volume) so recurring gaps become
-visible candidates for a new built-in intent or glossary entry; NL Q&A
-assistant over the catalog - LLM-backed
-(Anthropic) open-ended, multi-turn answers grounded in real
-catalog/DQ/lineage data when `ANTHROPIC_API_KEY` is set, falling back
-to deterministic keyword-matched intents + TF-IDF semantic retrieval
-otherwise; team management.
+terms, processes, risks, controls, and discussion threads), ranked by
+real dense-vector embeddings (Voyage AI) when `VOYAGE_API_KEY` is set -
+computed once per entity and cached (`entity_embeddings`, auto-
+invalidated on edit via a text hash), falling back to the same local
+TF-IDF retrieval as before (no external API call) when it isn't -
+plus an "@" mention picker on both the search bar and the Ask page for
+referencing a specific entity by exact name instead of relying on
+keyword matching; every Ask question and search query is logged with a
+matched/unmatched signal, rolling up into an admin-only "Search
+Insights" report (top unanswered questions ranked by frequency, plus
+overall query volume) so recurring gaps become visible candidates for
+a new built-in intent or glossary entry; NL Q&A assistant over the
+catalog - LLM-backed (Anthropic) open-ended, multi-turn answers
+grounded in real catalog/DQ/lineage data when `ANTHROPIC_API_KEY` is
+set, falling back to deterministic keyword-matched intents + the same
+embeddings/TF-IDF semantic retrieval otherwise; team management.
 
 **Billing & platform operations** - per-plan entitlements (starter/
 team/business/enterprise, plus an open "trial" profile granted from

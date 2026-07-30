@@ -21,8 +21,10 @@ deterministic paths, unchanged from before:
      from real data via a template - these are the "simple" questions
      and the answers are exact, not generated.
   2. Semantic fallback: anything that doesn't match a known intent
-     falls back to catalog_search_service's TF-IDF retrieval and
-     returns the closest-matching datasets/glossary terms.
+     falls back to app.services.embedding_service's retrieval (real
+     Voyage embeddings when VOYAGE_API_KEY is set and reachable,
+     catalog_search_service's TF-IDF ranking otherwise) and returns
+     the closest-matching datasets/glossary terms.
 """
 
 import os
@@ -34,7 +36,7 @@ from sqlalchemy.orm import Session
 from app.models.dataset import Dataset
 from app.models.lineage import DatasetLineage
 
-from app.services.catalog_search_service import semantic_search
+from app.services.embedding_service import semantic_search
 from app.services.lineage_quality_service import compute_effective_quality
 from app.services.maturity_service import compute_maturity
 
@@ -180,8 +182,8 @@ def _build_llm_context(
     stats, a full catalog directory (so the model knows what exists even
     beyond what's retrieved), and detailed cards for the handful of
     datasets/glossary terms most relevant to this specific question (via
-    the same TF-IDF retrieval catalog_search_service already provides).
-    Returns the context text plus the retrieved items shaped as
+    the same embedding_service retrieval used below). Returns the
+    context text plus the retrieved items shaped as
     AskResponse sources, so the frontend can link straight to them.
     """
 

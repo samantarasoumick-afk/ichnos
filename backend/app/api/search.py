@@ -2,8 +2,8 @@
 The app's global, cross-entity search bar (top nav "Search everything"
 box) - not to be confused with the Ask assistant, which answers
 questions in prose. This just finds things and links to them. Both
-sit on top of the same TF-IDF retrieval in
-app/services/catalog_search_service.py.
+sit on top of the same retrieval in app/services/embedding_service.py
+(real Voyage embeddings when configured, TF-IDF fallback otherwise).
 """
 
 from fastapi import APIRouter
@@ -22,7 +22,7 @@ from app.schemas.search import SearchResultItem
 from app.auth.dependencies import get_current_user
 
 from app.services.catalog_search_service import describe_document
-from app.services.catalog_search_service import semantic_search
+from app.services.embedding_service import semantic_search
 from app.services.query_log_service import log_query_event
 
 

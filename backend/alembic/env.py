@@ -41,6 +41,7 @@ from app.models import certification_request  # noqa: E402,F401
 from app.models import glossary_link  # noqa: E402,F401
 from app.models import business_process  # noqa: E402,F401
 from app.models import marketing_event  # noqa: E402,F401
+from app.models import entity_embedding  # noqa: E402,F401
 
 # this is the Alembic Config object, which provides
 # access to the values within the .ini file in use.
