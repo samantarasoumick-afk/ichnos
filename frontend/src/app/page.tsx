@@ -62,6 +62,19 @@ export default function Home() {
   const [dataCategoryFilter, setDataCategoryFilter] = useState("ALL");
   const [sortBy, setSortBy] = useState("trust_score");
 
+  // The KPI cards below (Total/High Risk/PII/Governance/Operational)
+  // are clickable - each one is the exact same predicate used to
+  // compute its own count, so clicking a card always shows precisely
+  // the datasets that number represents. A second click (or clicking
+  // Total) clears it, same toggle behavior the category pills below
+  // already use.
+  type QuickFilter = "ALL" | "HIGH_RISK" | "HAS_PII" | "GOVERNANCE_ALERT" | "OPERATIONAL_ALERT";
+  const [quickFilter, setQuickFilter] = useState<QuickFilter>("ALL");
+
+  function toggleQuickFilter(next: QuickFilter) {
+    setQuickFilter((prev) => (prev === next ? "ALL" : next));
+  }
+
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
   const canManageSources = user?.role !== "viewer";
@@ -167,7 +180,8 @@ export default function Home() {
     sensitivityFilter !== "ALL" ||
     certificationFilter !== "ALL" ||
     governanceFilter !== "ALL" ||
-    dataCategoryFilter !== "ALL";
+    dataCategoryFilter !== "ALL" ||
+    quickFilter !== "ALL";
 
   function clearFilters() {
     setSearch("");
@@ -176,6 +190,7 @@ export default function Home() {
     setCertificationFilter("ALL");
     setGovernanceFilter("ALL");
     setDataCategoryFilter("ALL");
+    setQuickFilter("ALL");
   }
 
   const filteredDatasets = datasets
@@ -220,6 +235,22 @@ export default function Home() {
     }
 
     if (dataCategoryFilter !== "ALL" && dataset.data_category !== dataCategoryFilter) {
+      return false;
+    }
+
+    if (quickFilter === "HIGH_RISK" && dataset.sensitivity_score !== "HIGH") {
+      return false;
+    }
+
+    if (quickFilter === "HAS_PII" && !(dataset.pii_columns && dataset.pii_columns > 0)) {
+      return false;
+    }
+
+    if (quickFilter === "GOVERNANCE_ALERT" && dataset.governance_status === "HEALTHY") {
+      return false;
+    }
+
+    if (quickFilter === "OPERATIONAL_ALERT" && !isOperationalAlert(dataset)) {
       return false;
     }
 
@@ -333,7 +364,14 @@ export default function Home() {
 
       <div className="grid grid-cols-1 md:grid-cols-3 xl:grid-cols-5 gap-6 mb-8">
 
-        <div className="bg-white rounded-xl p-6 shadow">
+        <button
+          type="button"
+          onClick={() => setQuickFilter("ALL")}
+          title="Show all datasets"
+          className={`text-left bg-white rounded-xl p-6 shadow transition hover:shadow-md ${
+            quickFilter === "ALL" ? "ring-2 ring-black" : ""
+          }`}
+        >
             <div className="text-sm text-gray-500">
             Total Datasets
             </div>
@@ -341,9 +379,16 @@ export default function Home() {
             <div className="text-4xl font-bold mt-2">
             {totalDatasets}
             </div>
-        </div>
+        </button>
 
-        <div className="bg-white rounded-xl p-6 shadow">
+        <button
+          type="button"
+          onClick={() => toggleQuickFilter("HIGH_RISK")}
+          title="Show only high-sensitivity datasets"
+          className={`text-left bg-white rounded-xl p-6 shadow transition hover:shadow-md ${
+            quickFilter === "HIGH_RISK" ? "ring-2 ring-red-500" : ""
+          }`}
+        >
             <div className="text-sm text-gray-500">
             High Risk
             </div>
@@ -351,9 +396,16 @@ export default function Home() {
             <div className="text-4xl font-bold mt-2 text-red-600">
             {highRiskDatasets}
             </div>
-        </div>
+        </button>
 
-        <div className="bg-white rounded-xl p-6 shadow">
+        <button
+          type="button"
+          onClick={() => toggleQuickFilter("HAS_PII")}
+          title="Show only datasets with PII columns"
+          className={`text-left bg-white rounded-xl p-6 shadow transition hover:shadow-md ${
+            quickFilter === "HAS_PII" ? "ring-2 ring-orange-500" : ""
+          }`}
+        >
             <div className="text-sm text-gray-500">
             PII Columns
             </div>
@@ -361,9 +413,16 @@ export default function Home() {
             <div className="text-4xl font-bold mt-2 text-orange-600">
             {totalPIIColumns}
             </div>
-        </div>
+        </button>
 
-        <div className="bg-white rounded-xl p-6 shadow">
+        <button
+          type="button"
+          onClick={() => toggleQuickFilter("GOVERNANCE_ALERT")}
+          title="Show only datasets that aren't governance-healthy"
+          className={`text-left bg-white rounded-xl p-6 shadow transition hover:shadow-md ${
+            quickFilter === "GOVERNANCE_ALERT" ? "ring-2 ring-yellow-500" : ""
+          }`}
+        >
             <div className="text-sm text-gray-500">
             Governance Alerts
             </div>
@@ -371,9 +430,16 @@ export default function Home() {
             <div className="text-4xl font-bold mt-2 text-yellow-600">
             {unhealthyDatasets}
             </div>
-        </div>
+        </button>
 
-        <div className="bg-white rounded-xl p-6 shadow">
+        <button
+          type="button"
+          onClick={() => toggleQuickFilter("OPERATIONAL_ALERT")}
+          title="Show only datasets with an operational alert"
+          className={`text-left bg-white rounded-xl p-6 shadow transition hover:shadow-md ${
+            quickFilter === "OPERATIONAL_ALERT" ? "ring-2 ring-red-500" : ""
+          }`}
+        >
             <div className="text-sm text-gray-500">
             Operational Alerts
             </div>
@@ -381,9 +447,25 @@ export default function Home() {
             <div className="text-4xl font-bold mt-2 text-red-600">
             {unstableDatasets}
             </div>
-        </div>
+        </button>
 
 </div>
+
+      {quickFilter !== "ALL" && (
+        <div className="-mt-4 mb-8 text-sm text-gray-500">
+          Showing datasets matching{" "}
+          <span className="font-medium text-gray-700">
+            {quickFilter === "HIGH_RISK" && "High Risk"}
+            {quickFilter === "HAS_PII" && "PII Columns"}
+            {quickFilter === "GOVERNANCE_ALERT" && "Governance Alerts"}
+            {quickFilter === "OPERATIONAL_ALERT" && "Operational Alerts"}
+          </span>{" "}
+          &middot;{" "}
+          <button type="button" onClick={() => setQuickFilter("ALL")} className="underline hover:text-gray-700">
+            clear
+          </button>
+        </div>
+      )}
 
       {totalDatasets > 0 && (
         <div className="mb-8 flex flex-wrap items-center gap-3 rounded-xl bg-white p-4 shadow">
