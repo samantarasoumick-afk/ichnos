@@ -141,7 +141,7 @@ export default function TopNav() {
         {user?.is_platform_admin && (
           <Link
             href="/platform"
-            className={`${linkClasses("/platform")} rounded-full bg-[#14121F] px-2.5 py-1 !text-white`}
+            className={`${linkClasses("/platform")} rounded-full bg-[#0F172A] px-2.5 py-1 !text-white`}
           >
             Platform
           </Link>
