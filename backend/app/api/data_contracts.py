@@ -1,3 +1,4 @@
+from datetime import datetime
 from typing import Optional
 
 from fastapi import APIRouter
@@ -264,6 +265,11 @@ def activate_data_contract(
         other.status = "DEPRECATED"
 
     contract.status = "ACTIVE"
+    # Who actually turned enforcement on, and when - a persisted fact
+    # on the contract itself, not just reconstructable from the
+    # contract.activate audit event logged below.
+    contract.activated_by_email = current_user.email
+    contract.activated_at = datetime.utcnow()
     db.flush()
 
     dataset = get_dataset_or_404(contract.dataset_id, db, current_user)

@@ -379,6 +379,10 @@ export type DataContract = {
   last_evaluated_at?: string | null;
   last_status?: "COMPLIANT" | "BREACHED" | null;
   last_breach_details?: string | null;
+  // Who actually turned enforcement on for this contract version, and
+  // when - null until it's activated (still DRAFT).
+  activated_by_email?: string | null;
+  activated_at?: string | null;
   created_at?: string;
   updated_at?: string;
 };

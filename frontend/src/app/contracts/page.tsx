@@ -144,6 +144,11 @@ export default function ContractsPage() {
           active versus what&apos;s currently breached. Each contract still lives on its own dataset page for
           full editing; this is the org-wide view for triage.
         </p>
+        <p className="mt-2 max-w-2xl text-sm text-gray-500">
+          Enforcement is automatic, not scheduled: every rescan or re-upload of a contracted dataset re-checks it
+          against the contract&apos;s schema expectations and (if set) minimum quality score, and activating a
+          contract runs that same check immediately.
+        </p>
       </div>
 
       {errorMessage && (
@@ -192,6 +197,7 @@ export default function ContractsPage() {
                   <th className="px-4 py-3">Status</th>
                   <th className="px-4 py-3">Evaluation</th>
                   <th className="px-4 py-3">Owner</th>
+                  <th className="px-4 py-3">Activated by</th>
                   <th className="px-4 py-3">Last evaluated</th>
                   {canEdit && <th className="px-4 py-3 text-right">Actions</th>}
                 </tr>
@@ -224,6 +230,20 @@ export default function ContractsPage() {
                     </td>
                     <td className="px-4 py-3 text-gray-600">{contract.owner || "–"}</td>
                     <td className="px-4 py-3 text-gray-500">
+                      {contract.activated_by_email ? (
+                        <>
+                          <div>{contract.activated_by_email}</div>
+                          {contract.activated_at && (
+                            <div className="text-xs text-gray-400">
+                              {new Date(contract.activated_at).toLocaleDateString()}
+                            </div>
+                          )}
+                        </>
+                      ) : (
+                        "–"
+                      )}
+                    </td>
+                    <td className="px-4 py-3 text-gray-500">
                       {contract.last_evaluated_at ? new Date(contract.last_evaluated_at).toLocaleString() : "–"}
                     </td>
                     {canEdit && (
@@ -253,7 +273,7 @@ export default function ContractsPage() {
 
                 {rows.length === 0 && (
                   <tr>
-                    <td colSpan={canEdit ? 7 : 6} className="px-4 py-8 text-center text-gray-500">
+                    <td colSpan={canEdit ? 8 : 7} className="px-4 py-8 text-center text-gray-500">
                       {contracts.length === 0
                         ? "No data contracts yet - create one from any dataset's detail page."
                         : "No contracts match this search/filter."}

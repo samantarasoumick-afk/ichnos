@@ -54,6 +54,8 @@ class DataContractResponse(BaseModel):
     last_evaluated_at: Optional[datetime] = None
     last_status: Optional[str] = None
     last_breach_details: Optional[str] = None
+    activated_by_email: Optional[str] = None
+    activated_at: Optional[datetime] = None
     created_at: Optional[datetime] = None
     updated_at: Optional[datetime] = None
 

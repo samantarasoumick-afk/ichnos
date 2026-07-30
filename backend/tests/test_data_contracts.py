@@ -196,11 +196,14 @@ class DataContractsTests(unittest.TestCase):
         self.assertEqual(r.status_code, 400)
 
     def test_activate_evaluates_immediately_and_reports_compliant(self):
-        headers = self._register_and_login(f"c6{self._n}@a.com", f"Contracts Org 6 {self._n}")
+        email = f"c6{self._n}@a.com"
+        headers = self._register_and_login(email, f"Contracts Org 6 {self._n}")
         _source_id, dataset_id, _mock = self._create_scanned_dataset(headers)
 
         r = self.client.post("/api/data-contracts", headers=headers, json=self._contract_payload(dataset_id))
         contract_id = r.json()["id"]
+        self.assertIsNone(r.json()["activated_by_email"])
+        self.assertIsNone(r.json()["activated_at"])
 
         r = self.client.post(f"/api/data-contracts/{contract_id}/activate", headers=headers)
         self.assertEqual(r.status_code, 200, r.text)
@@ -208,6 +211,10 @@ class DataContractsTests(unittest.TestCase):
         self.assertEqual(body["status"], "ACTIVE")
         self.assertEqual(body["last_status"], "COMPLIANT")
         self.assertIsNotNone(body["last_evaluated_at"])
+        # Who actually enforced this contract, and when - a persisted
+        # fact on the row itself, not just an audit-log entry.
+        self.assertEqual(body["activated_by_email"], email)
+        self.assertIsNotNone(body["activated_at"])
 
         r = self.client.get("/api/datasets", headers=headers)
         self.assertEqual(r.json()[0]["contract_status"], "COMPLIANT")

@@ -150,6 +150,20 @@ export default function DataContractPanel({ datasetId, canEdit }: Props) {
         )}
       </div>
 
+      {contracts.length > 0 && (
+        <div className="mb-4 rounded-lg border bg-gray-50 p-3 text-xs text-gray-600">
+          <span className="font-semibold text-gray-700">How this is enforced: </span>
+          Checked automatically every time this dataset is rescanned or re-uploaded (any
+          connected source scan, file, or dbt upload), and immediately the moment a contract is
+          activated - not on a schedule, and not something anyone has to remember to run. Each
+          check compares the dataset&apos;s actual columns against the contract&apos;s schema
+          expectations (missing required columns, type mismatches, unexpected nullability) and,
+          if a minimum quality score is set, the dataset&apos;s most recent data quality profile.
+          A breach here is also visible to any downstream dataset that consumes this one, via
+          lineage.
+        </div>
+      )}
+
       {upstreamBreaches.length > 0 && (
         <div className="mb-4 rounded-lg border border-amber-300 bg-amber-50 p-3">
           <div className="text-sm font-semibold text-amber-800">
@@ -222,6 +236,17 @@ export default function DataContractPanel({ datasetId, canEdit }: Props) {
 
               {contract.owner && (
                 <div className="text-sm text-gray-500 mt-2">Owner: {contract.owner}</div>
+              )}
+
+              {contract.activated_by_email ? (
+                <div className="text-sm text-gray-500 mt-1">
+                  Activated by {contract.activated_by_email}
+                  {contract.activated_at ? ` on ${new Date(contract.activated_at).toLocaleString()}` : ""}
+                </div>
+              ) : (
+                contract.status === "DRAFT" && (
+                  <div className="text-sm text-gray-400 mt-1">Not yet activated - not enforced until it is.</div>
+                )
               )}
 
               {contract.schema_expectations.columns.length > 0 && (

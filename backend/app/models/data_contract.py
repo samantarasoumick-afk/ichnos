@@ -31,10 +31,20 @@ class DataContract(Base):
             ...
         ]}
 
-    quality_thresholds and freshness_sla_hours are captured now (so a
-    contract's shape doesn't need another migration later) but not yet
-    enforced - that's Phase 2 (DQ threshold enforcement against the
-    DataQuality actuals already computed on every scan/upload).
+    Enforcement happens in data_contract_service.evaluate_contract(),
+    called automatically every time this dataset's columns are synced
+    (a live source rescan or a file/dbt upload - see
+    dataset_ingestion_service.sync_columns()) and once immediately on
+    activation (app.api.data_contracts's /activate endpoint), so a
+    freshly-activated contract doesn't sit at "not yet evaluated" until
+    the next scan happens to run. It checks schema_expectations
+    (missing required columns, type mismatches, unexpected
+    nullability) and, if set, quality_thresholds.min_overall_score
+    against the dataset's most recently profiled DataQuality score -
+    both feed the same last_status/last_breach_details write.
+    freshness_sla_hours is captured now (so a contract's shape doesn't
+    need another migration later) but not yet enforced against
+    anything.
     """
 
     __tablename__ = "data_contracts"
@@ -76,6 +86,18 @@ class DataContract(Base):
     last_status = Column(String, nullable=True)
 
     last_breach_details = Column(String, nullable=True)
+
+    # Who actually turned enforcement on for this specific contract
+    # version, and when - set once, in the /activate endpoint, the
+    # moment status flips DRAFT -> ACTIVE. None for a contract that's
+    # never been activated (still DRAFT) or that was created directly
+    # active by a migration/seed path. This is "who enforced it" as a
+    # persisted fact rather than something reconstructed from the
+    # audit log (which also gets a contract.activate entry at the same
+    # moment, for the org-wide activity trail).
+    activated_by_email = Column(String, nullable=True)
+
+    activated_at = Column(DateTime, nullable=True)
 
     created_at = Column(DateTime, default=datetime.utcnow)
 
