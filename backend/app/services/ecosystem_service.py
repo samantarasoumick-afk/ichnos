@@ -51,7 +51,7 @@ TIER_STANDALONE = "STANDALONE"
 _GOVERNANCE_SEVERITY = ["CRITICAL", "REVIEW_REQUIRED", "HEALTHY"]
 
 
-def _dataset_tier(dataset_id: str, has_upstream: set, has_downstream: set) -> str:
+def dataset_tier(dataset_id: str, has_upstream: set, has_downstream: set) -> str:
     upstream = dataset_id in has_upstream
     downstream = dataset_id in has_downstream
 
@@ -108,7 +108,7 @@ def build_ecosystem_graph(db: Session, organization_id: str) -> dict:
 
     dataset_by_id = {dataset.id: dataset for dataset in datasets}
     tier_by_dataset_id = {
-        dataset.id: _dataset_tier(dataset.id, has_upstream, has_downstream)
+        dataset.id: dataset_tier(dataset.id, has_upstream, has_downstream)
         for dataset in datasets
     }
 
