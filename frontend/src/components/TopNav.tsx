@@ -17,6 +17,7 @@ const GOVERNANCE_ITEMS: NavItem[] = [
   { href: "/governance", label: "Overview" },
   { href: "/glossary", label: "Glossary" },
   { href: "/processes", label: "Processes" },
+  { href: "/contracts", label: "Contracts" },
   { href: "/risks", label: "Risks & Controls" },
   { href: "/privacy", label: "Privacy" },
 ];
