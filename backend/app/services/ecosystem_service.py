@@ -1,11 +1,11 @@
 """
-Powers the Ecosystem View - a new-analyst-onboarding capability that
-shows an organization's entire data estate as one map: front office
-(where data originates) through middle office (processing/modeling)
-to back office (reporting), and lets someone trace a number on a
-report all the way back to the system it came from, or trace a raw
-table all the way forward to every report it feeds - in both
-directions, from either end.
+Powers the Ecosystem View - a capability that shows an organization's
+entire data estate as one map: front office (where data originates)
+through middle office (processing/modeling) to back office
+(reporting), and lets someone trace a number on a report all the way
+back to the system it came from, or trace a raw table all the way
+forward to every report it feeds - in both directions, from either
+end.
 
 The three tiers are deliberately computed from the real lineage graph's
 topology rather than tagged by hand or inferred from source type:
@@ -31,11 +31,29 @@ counts; the frontend can drill into a source to see its individual
 datasets, each with the same rich detail (DQ, PII, classification,
 policies, lineage, contract status) already computed on the Dataset
 model and exposed via DatasetResponse.
+
+Beyond the lineage-derived front/middle/back-office layer, the map
+also surfaces the governance layer that cuts across it - business
+processes and glossary terms are both many-to-many linked to
+datasets (BusinessProcessLink / GlossaryTermLink), so they're returned
+as their own node lists plus the edges connecting them to whichever
+datasets they touch, the same shape as the lineage edges. Contracts
+are deliberately NOT a third linked-node type - a contract belongs to
+exactly one dataset, so it's just a fact about that dataset (already
+in dataset_nodes as contract_status) rather than a separate thing
+with its own connections; the full contracts list is still returned
+so the frontend can show version/owner/breach detail without a
+second API round-trip.
 """
 
 from sqlalchemy.orm import Session
 
+from app.models.business_process import BusinessProcess
+from app.models.business_process import BusinessProcessLink
+from app.models.data_contract import DataContract
 from app.models.dataset import Dataset
+from app.models.glossary_link import GlossaryTermLink
+from app.models.governance import BusinessGlossaryTerm
 from app.models.lineage import DatasetLineage
 from app.models.source import DataSource
 
@@ -198,9 +216,99 @@ def build_ecosystem_graph(db: Session, organization_id: str) -> dict:
         for upstream_id, downstream_id in source_edge_pairs
     ]
 
+    processes = db.query(BusinessProcess).filter(BusinessProcess.organization_id == organization_id).all()
+    process_links = (
+        db.query(BusinessProcessLink)
+        .join(Dataset, Dataset.id == BusinessProcessLink.dataset_id)
+        .filter(Dataset.organization_id == organization_id)
+        .all()
+    )
+
+    process_dataset_ids: dict[str, list[str]] = {}
+    for link in process_links:
+        process_dataset_ids.setdefault(link.process_id, []).append(link.dataset_id)
+
+    process_nodes = [
+        {
+            "id": process.id,
+            "name": process.name,
+            "description": process.description,
+            "owner": process.owner,
+            "dataset_ids": process_dataset_ids.get(process.id, []),
+        }
+        for process in processes
+    ]
+
+    process_edges = [
+        {"process_id": link.process_id, "dataset_id": link.dataset_id}
+        for link in process_links
+    ]
+
+    terms = (
+        db.query(BusinessGlossaryTerm)
+        .filter(BusinessGlossaryTerm.organization_id == organization_id)
+        .all()
+    )
+    term_links = (
+        db.query(GlossaryTermLink)
+        .join(Dataset, Dataset.id == GlossaryTermLink.dataset_id)
+        .filter(Dataset.organization_id == organization_id)
+        .all()
+    )
+
+    # A term can link to the same dataset more than once (one row per
+    # column it defines there) - the graph only shows dataset-level
+    # edges, so dedupe (term_id, dataset_id) pairs before turning them
+    # into edges, same principle as the source-edge rollup above.
+    term_dataset_ids: dict[str, set] = {}
+    term_edge_pairs: set = set()
+    for link in term_links:
+        term_dataset_ids.setdefault(link.term_id, set()).add(link.dataset_id)
+        term_edge_pairs.add((link.term_id, link.dataset_id))
+
+    glossary_nodes = [
+        {
+            "id": term.id,
+            "term": term.term,
+            "domain": term.domain,
+            "dataset_ids": sorted(term_dataset_ids.get(term.id, set())),
+        }
+        for term in terms
+    ]
+
+    glossary_edges = [
+        {"term_id": term_id, "dataset_id": dataset_id}
+        for term_id, dataset_id in term_edge_pairs
+    ]
+
+    contracts = (
+        db.query(DataContract)
+        .join(Dataset, Dataset.id == DataContract.dataset_id)
+        .filter(Dataset.organization_id == organization_id)
+        .all()
+    )
+
+    contract_nodes = [
+        {
+            "id": contract.id,
+            "dataset_id": contract.dataset_id,
+            "version": contract.version,
+            "status": contract.status,
+            "owner": contract.owner,
+            "last_status": contract.last_status,
+            "last_breach_details": contract.last_breach_details,
+        }
+        for contract in contracts
+    ]
+
     return {
         "sources": source_nodes,
         "source_edges": source_edges,
         "datasets": dataset_nodes,
         "edges": dataset_edges,
+        "processes": process_nodes,
+        "process_edges": process_edges,
+        "glossary_terms": glossary_nodes,
+        "glossary_edges": glossary_edges,
+        "contracts": contract_nodes,
     }

@@ -12,8 +12,13 @@ from fastapi.testclient import TestClient
 
 from app.db.database import SessionLocal
 from app.main import app
+from app.models.business_process import BusinessProcess
+from app.models.business_process import BusinessProcessLink
 from app.models.column import DatasetColumn
+from app.models.data_contract import DataContract
 from app.models.dataset import Dataset
+from app.models.glossary_link import GlossaryTermLink
+from app.models.governance import BusinessGlossaryTerm
 from app.models.lineage import DatasetLineage
 from app.models.organization import Organization
 from app.models.source import DataSource
@@ -130,6 +135,117 @@ class EcosystemServiceTests(unittest.TestCase):
             "purpose", "consent_status", "retention_status", "privacy_score",
         ):
             self.assertIn(field, raw_node)
+
+    def test_process_nodes_and_edges(self):
+        from app.services.ecosystem_service import build_ecosystem_graph
+
+        data = self._build_org_with_chain()
+
+        process = BusinessProcess(name="Order to Cash", owner="Finance", organization_id=data["org"].id)
+        self.db.add(process)
+        self.db.flush()
+
+        self.db.add_all([
+            BusinessProcessLink(process_id=process.id, dataset_id=data["raw"].id),
+            BusinessProcessLink(process_id=process.id, dataset_id=data["staging"].id),
+        ])
+        self.db.commit()
+
+        graph = build_ecosystem_graph(self.db, data["org"].id)
+
+        self.assertEqual(len(graph["processes"]), 1)
+        process_node = graph["processes"][0]
+        self.assertEqual(process_node["id"], process.id)
+        self.assertEqual(process_node["name"], "Order to Cash")
+        self.assertEqual(set(process_node["dataset_ids"]), {data["raw"].id, data["staging"].id})
+
+        edge_pairs = {(e["process_id"], e["dataset_id"]) for e in graph["process_edges"]}
+        self.assertEqual(edge_pairs, {(process.id, data["raw"].id), (process.id, data["staging"].id)})
+
+    def test_glossary_term_nodes_dedupe_multi_column_links(self):
+        from app.services.ecosystem_service import build_ecosystem_graph
+
+        data = self._build_org_with_chain()
+
+        term = BusinessGlossaryTerm(
+            term="Customer",
+            definition="A person or org that has purchased something",
+            domain="CRM",
+            organization_id=data["org"].id,
+        )
+        self.db.add(term)
+        self.db.flush()
+
+        # Two column-level links into the SAME dataset - the graph
+        # only shows dataset-level edges, so this must collapse to
+        # exactly one edge, not two.
+        self.db.add_all([
+            GlossaryTermLink(term_id=term.id, dataset_id=data["raw"].id, column_id=None),
+            GlossaryTermLink(term_id=term.id, dataset_id=data["raw"].id, column_id=None),
+        ])
+        self.db.commit()
+
+        graph = build_ecosystem_graph(self.db, data["org"].id)
+
+        self.assertEqual(len(graph["glossary_terms"]), 1)
+        term_node = graph["glossary_terms"][0]
+        self.assertEqual(term_node["id"], term.id)
+        self.assertEqual(term_node["term"], "Customer")
+        self.assertEqual(term_node["dataset_ids"], [data["raw"].id])
+
+        self.assertEqual(len(graph["glossary_edges"]), 1)
+        self.assertEqual(graph["glossary_edges"][0], {"term_id": term.id, "dataset_id": data["raw"].id})
+
+    def test_contracts_list_reflects_dataset_contract_status(self):
+        from app.services.ecosystem_service import build_ecosystem_graph
+
+        data = self._build_org_with_chain()
+
+        contract = DataContract(
+            dataset_id=data["report"].id,
+            version=1,
+            status="ACTIVE",
+            owner="Data Platform",
+            schema_expectations={"columns": []},
+            last_status="BREACHED",
+            last_breach_details="Missing expected column",
+        )
+        self.db.add(contract)
+        self.db.commit()
+
+        graph = build_ecosystem_graph(self.db, data["org"].id)
+
+        self.assertEqual(len(graph["contracts"]), 1)
+        contract_node = graph["contracts"][0]
+        self.assertEqual(contract_node["dataset_id"], data["report"].id)
+        self.assertEqual(contract_node["status"], "ACTIVE")
+        self.assertEqual(contract_node["last_status"], "BREACHED")
+
+        # The dataset node's own contract_status should already reflect
+        # this without a second lookup - callers shouldn't need to
+        # cross-reference the contracts list just to badge a node.
+        report_node = next(d for d in graph["datasets"] if d["id"] == data["report"].id)
+        self.assertEqual(report_node["contract_status"], "BREACHED")
+
+    def test_governance_layer_is_tenant_scoped(self):
+        from app.services.ecosystem_service import build_ecosystem_graph
+
+        data = self._build_org_with_chain()
+
+        process = BusinessProcess(name="Leaky Process", organization_id=data["org"].id)
+        self.db.add(process)
+        self.db.flush()
+        self.db.add(BusinessProcessLink(process_id=process.id, dataset_id=data["raw"].id))
+        self.db.commit()
+
+        other_org = Organization(name=f"Other Ecosystem Org {self._n}", slug=f"other-eco-{self._n}")
+        self.db.add(other_org)
+        self.db.commit()
+
+        graph = build_ecosystem_graph(self.db, other_org.id)
+        self.assertEqual(graph["processes"], [])
+        self.assertEqual(graph["glossary_terms"], [])
+        self.assertEqual(graph["contracts"], [])
 
 
 class EcosystemApiTests(unittest.TestCase):
