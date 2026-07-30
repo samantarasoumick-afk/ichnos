@@ -300,6 +300,43 @@ export default function Home() {
     isOperationalAlert
   ).length;
 
+  // The actual datasets behind each KPI number, computed against the
+  // full unfiltered `datasets` array so the count always matches what
+  // the KPI card itself displays - this is what "comes up" inline when
+  // a card is clicked, rather than just filtering the (much further
+  // down the page) dataset list and leaving the person to scroll to
+  // find out what the number actually meant.
+  const highRiskDatasetsList = datasets.filter((dataset) => dataset.sensitivity_score === "HIGH");
+  const piiDatasetsList = datasets.filter((dataset) => (dataset.pii_columns || 0) > 0);
+  const governanceAlertDatasetsList = datasets.filter((dataset) => dataset.governance_status !== "HEALTHY");
+  const operationalAlertDatasetsList = datasets.filter(isOperationalAlert);
+
+  const QUICK_FILTER_CONFIG: Record<
+    Exclude<typeof quickFilter, "ALL">,
+    { title: string; list: Dataset[]; figure: (dataset: Dataset) => string }
+  > = {
+    HIGH_RISK: {
+      title: "High risk datasets",
+      list: highRiskDatasetsList,
+      figure: (dataset) => `${dataset.sensitivity_score || "LOW"} sensitivity`,
+    },
+    HAS_PII: {
+      title: "Datasets with PII columns",
+      list: piiDatasetsList,
+      figure: (dataset) => `${dataset.pii_columns || 0} PII column${dataset.pii_columns === 1 ? "" : "s"}`,
+    },
+    GOVERNANCE_ALERT: {
+      title: "Governance alerts",
+      list: governanceAlertDatasetsList,
+      figure: (dataset) => `${dataset.governance_status || "UNKNOWN"} · score ${dataset.governance_score ?? 0}`,
+    },
+    OPERATIONAL_ALERT: {
+      title: "Operational alerts",
+      list: operationalAlertDatasetsList,
+      figure: (dataset) => `${dataset.operational_status || "UNKNOWN"}`,
+    },
+  };
+
   const dataCategoryBreakdown = (
     ["MASTER", "REFERENCE", "TRANSACTIONAL", "ANALYTICAL"] as const
   ).map((category) => ({
@@ -451,21 +488,52 @@ export default function Home() {
 
 </div>
 
-      {quickFilter !== "ALL" && (
-        <div className="-mt-4 mb-8 text-sm text-gray-500">
-          Showing datasets matching{" "}
-          <span className="font-medium text-gray-700">
-            {quickFilter === "HIGH_RISK" && "High Risk"}
-            {quickFilter === "HAS_PII" && "PII Columns"}
-            {quickFilter === "GOVERNANCE_ALERT" && "Governance Alerts"}
-            {quickFilter === "OPERATIONAL_ALERT" && "Operational Alerts"}
-          </span>{" "}
-          &middot;{" "}
-          <button type="button" onClick={() => setQuickFilter("ALL")} className="underline hover:text-gray-700">
-            clear
-          </button>
-        </div>
-      )}
+      {quickFilter !== "ALL" && (() => {
+        const { title, list, figure } = QUICK_FILTER_CONFIG[quickFilter];
+        const shown = list.slice(0, 8);
+        const remaining = list.length - shown.length;
+
+        return (
+          <div className="mb-8 rounded-xl border bg-white p-5 shadow">
+            <div className="mb-3 flex items-center justify-between">
+              <h2 className="text-lg font-semibold">
+                {title} ({list.length})
+              </h2>
+              <button
+                type="button"
+                onClick={() => setQuickFilter("ALL")}
+                className="text-sm text-gray-500 underline hover:text-gray-700"
+              >
+                clear
+              </button>
+            </div>
+
+            {list.length === 0 ? (
+              <div className="text-sm text-gray-500">None right now.</div>
+            ) : (
+              <div className="space-y-2">
+                {shown.map((dataset) => (
+                  <Link
+                    key={dataset.id}
+                    href={`/datasets/${dataset.id}`}
+                    className="flex items-center justify-between rounded-lg border px-4 py-2.5 text-sm hover:bg-gray-50 hover:shadow-sm transition"
+                  >
+                    <span className="font-medium">
+                      {dataset.schema_name}.{dataset.name}
+                    </span>
+                    <span className="text-xs text-gray-500">{figure(dataset)}</span>
+                  </Link>
+                ))}
+                {remaining > 0 && (
+                  <div className="pt-1 text-xs text-gray-400">
+                    +{remaining} more &mdash; filtered into the dataset list below.
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+        );
+      })()}
 
       {totalDatasets > 0 && (
         <div className="mb-8 flex flex-wrap items-center gap-3 rounded-xl bg-white p-4 shadow">
