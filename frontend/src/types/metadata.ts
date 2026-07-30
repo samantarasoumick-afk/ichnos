@@ -789,3 +789,46 @@ export type EcosystemGraph = {
   datasets: EcosystemDatasetNode[];
   edges: EcosystemDatasetEdge[];
 };
+
+// --- "Trace this dashboard" provenance explainer ---
+
+export type EcosystemTraceDirection = "upstream" | "downstream";
+
+export type EcosystemTraceDatasetSummary = {
+  id: string;
+  name: string;
+  schema_name: string;
+  source_id: string;
+  source_name: string;
+  source_type: string | null;
+  tier: EcosystemTier;
+  owner?: string | null;
+  governance_status?: string | null;
+  quality_score?: number;
+  pii_columns?: number;
+  sensitivity_score?: SensitivityScore;
+  contract_status?: ContractStatus | null;
+  freshness_status?: string | null;
+};
+
+export type EcosystemTraceLevel = {
+  depth: number;
+  datasets: EcosystemTraceDatasetSummary[];
+};
+
+export type EcosystemTraceEdge = {
+  id: string;
+  upstream_dataset_id: string;
+  downstream_dataset_id: string;
+  transformation_type?: string | null;
+  transformation_description?: string | null;
+};
+
+export type EcosystemTrace = {
+  dataset_id: string;
+  direction: EcosystemTraceDirection;
+  levels: EcosystemTraceLevel[];
+  edges: EcosystemTraceEdge[];
+  narrative: string;
+  narrative_source: "llm" | "template";
+};

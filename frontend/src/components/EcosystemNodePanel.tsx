@@ -1,10 +1,14 @@
 "use client";
 
 import Link from "next/link";
+import { useState } from "react";
 
+import api from "../services/api";
 import type {
   EcosystemDatasetNode,
   EcosystemGraph as EcosystemGraphData,
+  EcosystemTrace,
+  EcosystemTraceDirection,
 } from "../types/metadata";
 import type { EcosystemSelection } from "./EcosystemGraph";
 
@@ -98,6 +102,94 @@ function EcosystemLineageList({
           </button>
         ))}
       </div>
+    </div>
+  );
+}
+
+function TraceSection({ datasetId, defaultDirection }: { datasetId: string; defaultDirection: EcosystemTraceDirection }) {
+  const [direction, setDirection] = useState<EcosystemTraceDirection>(defaultDirection);
+  const [trace, setTrace] = useState<EcosystemTrace | null>(null);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  async function runTrace(nextDirection: EcosystemTraceDirection) {
+    setDirection(nextDirection);
+    setLoading(true);
+    setError(null);
+    try {
+      const response = await api.get<EcosystemTrace>(`/api/ecosystem/trace/${datasetId}`, {
+        params: { direction: nextDirection },
+      });
+      setTrace(response.data);
+    } catch (err) {
+      console.error(err);
+      setError("Unable to trace this dataset's lineage right now.");
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  return (
+    <div className="mt-4 border-t pt-3">
+      <div className="mb-2 text-xs font-semibold uppercase tracking-wide text-gray-400">
+        Trace this dashboard&apos;s provenance
+      </div>
+
+      <div className="mb-2 flex gap-2">
+        <button
+          type="button"
+          onClick={() => runTrace("upstream")}
+          disabled={loading}
+          className={`rounded border px-2 py-1 text-xs hover:bg-gray-50 disabled:opacity-50 ${
+            trace && direction === "upstream" ? "border-black font-medium" : ""
+          }`}
+        >
+          Trace back to origin
+        </button>
+        <button
+          type="button"
+          onClick={() => runTrace("downstream")}
+          disabled={loading}
+          className={`rounded border px-2 py-1 text-xs hover:bg-gray-50 disabled:opacity-50 ${
+            trace && direction === "downstream" ? "border-black font-medium" : ""
+          }`}
+        >
+          Trace downstream impact
+        </button>
+      </div>
+
+      {loading && <div className="text-xs text-gray-400">Tracing lineage, hop by hop...</div>}
+      {error && <div className="text-xs text-red-600">{error}</div>}
+
+      {trace && !loading && (
+        <div>
+          <span
+            className={`mb-1 inline-block rounded px-1.5 py-0.5 text-[10px] uppercase ${
+              trace.narrative_source === "llm" ? "bg-purple-100 text-purple-700" : "bg-gray-100 text-gray-600"
+            }`}
+          >
+            {trace.narrative_source === "llm" ? "AI-generated (Claude)" : "Template narrative"}
+          </span>
+          <p className="whitespace-pre-line text-sm leading-relaxed text-gray-700">{trace.narrative}</p>
+
+          {trace.levels.length > 1 && (
+            <div className="mt-2 space-y-1">
+              {trace.levels.map((level) => (
+                <div key={level.depth} className="flex flex-wrap items-center gap-1">
+                  <span className="text-[10px] uppercase text-gray-400">
+                    {level.depth === 0 ? "This" : `Hop ${level.depth}`}
+                  </span>
+                  {level.datasets.map((d) => (
+                    <span key={d.id} className="rounded border px-1.5 py-0.5 text-[10px] text-gray-600">
+                      {d.schema_name}.{d.name}
+                    </span>
+                  ))}
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
     </div>
   );
 }
@@ -221,6 +313,12 @@ export default function EcosystemNodePanel({ graph, selection, audience, onClose
         <EcosystemLineageList title="Comes from (upstream)" datasets={upstream} onSelectDataset={onSelectDataset} />
         <EcosystemLineageList title="Feeds into (downstream)" datasets={downstream} onSelectDataset={onSelectDataset} />
       </div>
+
+      <TraceSection
+        key={dataset.id}
+        datasetId={dataset.id}
+        defaultDirection={dataset.tier === "FRONT_OFFICE" ? "downstream" : "upstream"}
+      />
 
       <Link
         href={`/datasets/${dataset.id}`}
