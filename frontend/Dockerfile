@@ -1,4 +1,4 @@
-# DataFe frontend (Next.js).
+# DatFe frontend (Next.js).
 #
 # Build: docker build -t datafe-frontend ./frontend
 # Run:   see docker-compose.yml at the repo root - this image expects

@@ -80,7 +80,7 @@ export default function AskPage() {
       return `${speaker}: ${entry.text}${sourceLines}`;
     });
 
-    const header = `DataFe - Ask conversation\nExported ${new Date().toLocaleString()}\n\n`;
+    const header = `DatFe - Ask conversation\nExported ${new Date().toLocaleString()}\n\n`;
     const blob = new Blob([header + lines.join("\n\n")], { type: "text/plain" });
     const url = URL.createObjectURL(blob);
 

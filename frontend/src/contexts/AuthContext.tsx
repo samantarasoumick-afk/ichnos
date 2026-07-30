@@ -18,7 +18,7 @@ export type CurrentUser = {
   organization_id: string;
   organization_name: string | null;
   organization_slug: string | null;
-  // DataFe's own operator role, set directly in the database - not
+  // DatFe's own operator role, set directly in the database - not
   // grantable through any API. Gates the /platform dashboard link in
   // TopNav and the page itself; completely separate from `role`,
   // which is scoped to this user's own organization.

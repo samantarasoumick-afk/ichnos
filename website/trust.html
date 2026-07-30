@@ -3,8 +3,8 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Trust & Security — DataFe</title>
-<meta name="description" content="How DataFe handles tenant isolation, authentication, encryption, and what's still open on our security roadmap.">
+<title>Trust & Security — DatFe</title>
+<meta name="description" content="How DatFe handles tenant isolation, authentication, encryption, and what's still open on our security roadmap.">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Unbounded:wght@500;600;700&family=Poppins:wght@400;500;600;700;800&display=swap" rel="stylesheet">
@@ -68,12 +68,12 @@
   <p class="meta">Last updated 2026-07-26. This page is derived directly from our internal engineering security review and is kept in sync with it — not marketing copy written separately from what the code actually does.</p>
 
   <div class="callout">
-    <strong>Where we are today:</strong> DataFe is in early access. We're honest that this means no SOC 2 report and no completed third-party penetration test yet — both are on our roadmap before we ask anyone to run production PII through a self-hosted or hosted instance at scale. Everything below is independently true right now; nothing here is aspirational or "coming soon" phrased as if it already shipped.
+    <strong>Where we are today:</strong> DatFe is in early access. We're honest that this means no SOC 2 report and no completed third-party penetration test yet — both are on our roadmap before we ask anyone to run production PII through a self-hosted or hosted instance at scale. Everything below is independently true right now; nothing here is aspirational or "coming soon" phrased as if it already shipped.
   </div>
 
   <section>
     <h2>Tenant isolation</h2>
-    <p>DataFe is multi-tenant. Every query that touches your organization's data filters by organization ID at the database layer, and this is verified by dedicated automated tests that specifically check for cross-organization data leakage, not just happy-path access.</p>
+    <p>DatFe is multi-tenant. Every query that touches your organization's data filters by organization ID at the database layer, and this is verified by dedicated automated tests that specifically check for cross-organization data leakage, not just happy-path access.</p>
   </section>
 
   <section>
@@ -92,14 +92,14 @@
   <section>
     <h2>Encryption</h2>
     <ul>
-      <li>Data source connection credentials (e.g. a warehouse password you connect DataFe to) are encrypted at rest before they ever touch the database — verified by a test that reads the raw database file and confirms the plaintext credential never appears in it.</li>
+      <li>Data source connection credentials (e.g. a warehouse password you connect DatFe to) are encrypted at rest before they ever touch the database — verified by a test that reads the raw database file and confirms the plaintext credential never appears in it.</li>
       <li>Traffic to and from the app should always run over HTTPS in any real deployment (self-hosted instances behind a tunnel or reverse proxy should terminate TLS there).</li>
     </ul>
   </section>
 
   <section>
     <h2>What we store from your connected sources</h2>
-    <p>Connecting a data source (a database, warehouse, or file) lets DataFe read schema metadata (table/column names, types, relationships) and, for cataloging purposes, a limited number of sample values per column so the catalog is actually useful to search. We do not ingest or store your full datasets. See our <a href="/privacy.html">Privacy Policy</a> for more detail on data handling.</p>
+    <p>Connecting a data source (a database, warehouse, or file) lets DatFe read schema metadata (table/column names, types, relationships) and, for cataloging purposes, a limited number of sample values per column so the catalog is actually useful to search. We do not ingest or store your full datasets. See our <a href="/privacy.html">Privacy Policy</a> for more detail on data handling.</p>
   </section>
 
   <section>
@@ -126,6 +126,6 @@
     <p>Found something? Email <a href="mailto:samantara.soumick@gmail.com">samantara.soumick@gmail.com</a> directly — we'll treat it as a priority and get back to you promptly. We don't yet have a formal bug bounty program.</p>
   </section>
 </main>
-<footer>DataFe Metadata Intelligence — see also our <a href="/privacy.html">Privacy Policy</a>, <a href="/terms.html">Terms of Service</a>, and <a href="/dpa.html">DPA</a>.</footer>
+<footer>DatFe Metadata Intelligence — see also our <a href="/privacy.html">Privacy Policy</a>, <a href="/terms.html">Terms of Service</a>, and <a href="/dpa.html">DPA</a>.</footer>
 </body>
 </html>

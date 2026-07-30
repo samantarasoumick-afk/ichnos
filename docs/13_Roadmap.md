@@ -77,7 +77,7 @@ embeddings/TF-IDF semantic retrieval otherwise; team management.
 team/business/enterprise, plus an open "trial" profile granted from
 signup) enforced at the API layer for sources, editor seats, and Ask
 daily volume; Stripe checkout, webhook, and billing-portal integration
-for self-serve upgrade/downgrade; a platform-admin role (DataFe's own
+for self-serve upgrade/downgrade; a platform-admin role (DatFe's own
 operator role, separate from org-scoped RBAC) with a cross-org
 dashboard (funnel stats, organization list with plan overrides,
 suspend/reactivate); website visitor + signup funnel tracking, linked
@@ -116,7 +116,7 @@ customers.
       verification requires billing/card details on the Google Cloud
       account; GitHub's OAuth App registration is free with no card
       needed, and is arguably the better first provider anyway given
-      DataFe's early users. Links to an existing password/magic-link
+      DatFe's early users. Links to an existing password/magic-link
       account by email, or creates a new user + org for a first-time
       sign-in - same as password registration does. Real SAML for
       larger enterprise buyers is still open.
@@ -141,7 +141,7 @@ customers.
 
 - [x] Billing/subscription enforcement - entitlements enforced at the
       API layer, Stripe checkout/webhook/portal wired up. The pricing
-      strategy doc (`docs/DataFe_Pricing_Strategy.docx`) still needs a
+      strategy doc (`docs/DatFe_Pricing_Strategy.docx`) still needs a
       pass to strip old Ichnos-era internal references - tracked
       separately, doesn't block this checkbox.
 - [x] Masking capability for sensitive columns - Data Owner/admin can

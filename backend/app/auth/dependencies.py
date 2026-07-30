@@ -111,7 +111,7 @@ def require_platform_admin(
     """
     Gates the cross-org platform admin API (app/api/platform.py).
     Completely separate from require_role("admin") - that's scoped to
-    a user's own organization; this is DataFe's own operator role,
+    a user's own organization; this is DatFe's own operator role,
     set directly in the database (see User.is_platform_admin's
     docstring), never grantable through any API endpoint.
     """

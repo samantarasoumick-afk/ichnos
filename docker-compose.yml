@@ -61,7 +61,7 @@ services:
       SMTP_PORT: ${SMTP_PORT:-587}
       SMTP_USERNAME: ${SMTP_USERNAME:-}
       SMTP_PASSWORD: ${SMTP_PASSWORD:-}
-      SMTP_FROM: ${SMTP_FROM:-DataFe <no-reply@datafe.local>}
+      SMTP_FROM: ${SMTP_FROM:-DatFe <no-reply@datafe.local>}
       ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
       ANTHROPIC_MODEL: ${ANTHROPIC_MODEL:-claude-sonnet-5}
       VOYAGE_API_KEY: ${VOYAGE_API_KEY:-}

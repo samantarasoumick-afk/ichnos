@@ -1,10 +1,10 @@
 # Marketing Content Plan
 
-Grounded in `docs/DataFe_Pricing_Strategy.docx`'s positioning, not
+Grounded in `docs/DatFe_Pricing_Strategy.docx`'s positioning, not
 invented separately - the target buyer, competitive angle, and GTM
 motion described there are the inputs to everything below. This is a
 living document; revise it once real content is published and its
-performance is visible in the funnel data DataFe already tracks (see
+performance is visible in the funnel data DatFe already tracks (see
 "Measuring this" at the end - that part is not aspirational, it's
 already built).
 
@@ -33,7 +33,7 @@ rather than a generic topic list:
 2. **DPDP/GDPR-style compliance for small teams** - practical, not
    legal-advice-flavored (stays consistent with the brand voice rule
    against oversell on compliance topics - see
-   `docs/DataFe_Brand_Guidelines.docx`). "Here's what a PII inventory
+   `docs/DatFe_Brand_Guidelines.docx`). "Here's what a PII inventory
    actually requires" over "achieve compliance instantly."
 3. **Transparent pricing as the differentiator** - direct comparison
    content. Collibra/Informatica's opacity and Atlan's per-seat cliff
@@ -57,7 +57,7 @@ forgotten:
   comparison," "DPDP data inventory template," "who owns this data
   table") rather than broad awareness terms that only well-funded
   competitors can win.
-- **Comparison pages** - "DataFe vs Atlan," "DataFe vs Collibra" as
+- **Comparison pages** - "DatFe vs Atlan," "DatFe vs Collibra" as
   standalone pages, not just blog posts. These convert unusually well
   for a self-serve product because the visitor has already decided
   they need a catalog and is actively comparing - exactly the
@@ -104,7 +104,7 @@ just "how much traffic did we get."
 ## Where prospect pipeline gets logged
 
 Once a piece of content produces a real lead (a demo request, an
-inbound email), log it in `docs/DataFe_Business_Tracker.xlsx`'s Leads
+inbound email), log it in `docs/DatFe_Business_Tracker.xlsx`'s Leads
 & Demo Requests sheet - the Source column exists specifically to
 capture which channel/content it came from, so content ROI can be
 checked against the tracker's pipeline data, not just funnel

@@ -1,4 +1,4 @@
-# DataFe backend (FastAPI + SQLAlchemy + Alembic).
+# DatFe backend (FastAPI + SQLAlchemy + Alembic).
 #
 # Build: docker build -t datafe-backend ./backend
 # Run:   see docker-compose.yml at the repo root - this image expects

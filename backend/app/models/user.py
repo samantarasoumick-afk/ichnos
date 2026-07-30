@@ -56,7 +56,7 @@ class User(Base):
     # with "Sign in with GitHub" - whether that's how the account was
     # created, or a password/magic-link account linking GitHub later.
     # Nullable since most users will never set it; unique since two
-    # DataFe accounts can't share one GitHub identity.
+    # DatFe accounts can't share one GitHub identity.
     github_id = Column(
         String,
         unique=True,
@@ -101,7 +101,7 @@ class User(Base):
 
     # Platform-level superadmin - completely separate from the
     # org-scoped "admin" role above. An org admin manages their own
-    # organization; a platform admin (DataFe's own operator) can see
+    # organization; a platform admin (DatFe's own operator) can see
     # rollup activity across every organization and suspend/adjust
     # plans, but still can't read another org's datasets/sources -
     # see app/api/platform.py. Nullable-safe default False; nobody

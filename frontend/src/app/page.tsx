@@ -327,7 +327,7 @@ export default function Home() {
       <TopNav />
 
       <div className="mb-8">
-        <h1 className="text-4xl font-bold">DataFe</h1>
+        <h1 className="text-4xl font-bold">DatFe</h1>
         <p className="mt-1 text-gray-500">Metadata intelligence and governance platform</p>
       </div>
 

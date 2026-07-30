@@ -77,7 +77,7 @@ def _github_api_headers(access_token: str) -> dict:
         "Authorization": f"Bearer {access_token}",
         "Accept": "application/vnd.github+json",
         # GitHub's API rejects requests with no User-Agent.
-        "User-Agent": "DataFe-App",
+        "User-Agent": "DatFe-App",
     }
 
 
@@ -190,7 +190,7 @@ def fetch_github_identity(code: str, redirect_uri: str) -> dict:
     Full code -> verified identity exchange. Returns
     {"github_id": str, "email": str, "display_name": str}. Raises
     GitHubOAuthError if any step fails, or if no verified email can be
-    found at all - DataFe accounts are keyed by email, so sign-in
+    found at all - DatFe accounts are keyed by email, so sign-in
     isn't possible without one (GitHub accounts can have a private,
     unverified, or entirely absent email).
     """

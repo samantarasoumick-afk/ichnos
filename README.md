@@ -1,8 +1,8 @@
-# DataFe
+# DatFe
 
 [![CI](https://github.com/samantarasoumick-afk/ichnos/actions/workflows/ci.yml/badge.svg)](https://github.com/samantarasoumick-afk/ichnos/actions/workflows/ci.yml)
 
-**DataFe** is a metadata intelligence platform - a searchable, living
+**DatFe** is a metadata intelligence platform - a searchable, living
 catalog that turns messy tables, tangled pipelines, and forgotten
 spreadsheets into a self-explaining map of a company's data, with
 lineage, data quality, and governance built in rather than bolted on.
@@ -10,9 +10,9 @@ lineage, data quality, and governance built in rather than bolted on.
 Live at [datafetech.com](https://datafetech.com) (marketing site) /
 [app.datafetech.com](https://app.datafetech.com) (the app).
 
-> The GitHub repo is still named `ichnos` - that's DataFe's original
+> The GitHub repo is still named `ichnos` - that's DatFe's original
 > product name before a rebrand; the code and product itself are
-> DataFe throughout. Renaming the repo itself is on the backlog.
+> DatFe throughout. Renaming the repo itself is on the backlog.
 
 ## What it does
 

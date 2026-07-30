@@ -5,7 +5,7 @@ import { usePathname } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 
 import { useAuth } from "../contexts/AuthContext";
-import { DataFeLogo } from "./DataFeLogo";
+import { DatFeLogo } from "./DatFeLogo";
 import GlobalSearch from "./GlobalSearch";
 
 type NavItem = {
@@ -107,7 +107,7 @@ export default function TopNav() {
     <div className="mb-6 flex flex-wrap items-center justify-between gap-3 rounded-xl bg-white px-5 py-3 shadow">
       <div className="flex items-center gap-5">
         <Link href="/">
-          <DataFeLogo size={26} />
+          <DatFeLogo size={26} />
         </Link>
 
         <Link href="/ecosystem" className={linkClasses("/ecosystem")}>
@@ -138,7 +138,7 @@ export default function TopNav() {
           pathname={pathname}
         />
 
-        {/* DataFe's own operator role (see CurrentUser.is_platform_admin's
+        {/* DatFe's own operator role (see CurrentUser.is_platform_admin's
             comment) - completely separate from the org-scoped Admin
             dropdown above, so it's a distinct link rather than folded
             into it. */}

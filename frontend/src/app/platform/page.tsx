@@ -176,7 +176,7 @@ export default function PlatformAdminPage() {
         <div className="rounded-xl bg-white p-8 shadow">
           <h1 className="text-2xl font-bold mb-2">Platform Admin</h1>
           <p className="text-gray-600">
-            This dashboard is restricted to DataFe&apos;s own operators. Your account
+            This dashboard is restricted to DatFe&apos;s own operators. Your account
             doesn&apos;t have platform admin access.
           </p>
         </div>

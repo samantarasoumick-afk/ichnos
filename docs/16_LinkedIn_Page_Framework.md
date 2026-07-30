@@ -14,7 +14,7 @@ You'll need to be logged into a personal LinkedIn account to create a
 Company Page (linkedin.com/company/setup/new) - that's a step only you
 can do. Exact fields to fill in:
 
-- **Page name**: `DataFe`
+- **Page name**: `DatFe`
 - **LinkedIn public URL**: `linkedin.com/company/datafe` (check
   availability first; if taken, `datafe-io` or `datafehq` as fallback
   - avoid anything with "ichnos" in it, even as a fallback, to keep a
@@ -26,13 +26,13 @@ can do. Exact fields to fill in:
   small-team authenticity is actually on-brand given the "built for
   companies without a dedicated platform team" positioning)
 - **Company type**: Privately Held
-- **Logo**: export `DataFeMark` at 300x300px from
-  `frontend/src/components/DataFeLogo.tsx` (the dark squircle + copper
+- **Logo**: export `DatFeMark` at 300x300px from
+  `frontend/src/components/DatFeLogo.tsx` (the dark squircle + copper
   hexagon mark, not the full wordmark lockup - LinkedIn's logo slot is
   square and small, the wordmark won't read at that size)
 - **Cover image**: 1128x191px - a simple `--paper` (#FBF8F2) or
   `--ink` (#14121F) background with the tagline text in Unbounded,
-  per `docs/DataFe_Brand_Guidelines.docx`. Avoid a busy product
+  per `docs/DatFe_Brand_Guidelines.docx`. Avoid a busy product
   screenshot here; the cover image is prime real estate for the one
   sentence that matters most.
 
@@ -45,9 +45,9 @@ can do. Exact fields to fill in:
 Longer field, no strict limit but LinkedIn truncates to ~2 lines
 before "see more" - front-load the hook:
 
-> Your data has a story. DataFe helps you actually read it.
+> Your data has a story. DatFe helps you actually read it.
 >
-> DataFe is a metadata intelligence and governance platform for small
+> DatFe is a metadata intelligence and governance platform for small
 > and mid-size companies - built and priced for teams with real
 > governance needs (PII exposure, scattered ownership, no single
 > source of truth) but no dedicated data platform team or six-figure
@@ -69,7 +69,7 @@ performs as a native LinkedIn post rather than a link-out:
 |---|---|---|
 | "Who owns this?" friction | Short text post (150-300 words), first-person or story-framed | LinkedIn's algorithm favors native text it can keep users reading on-platform - this pillar is inherently anecdotal, which suits it |
 | DPDP/GDPR compliance for small teams | Document/carousel post (5-8 slides) | Practical, checklist-style content works better as a swipeable carousel than a wall of text - and carousels get saved/shared more, which is the highest-value engagement type for this pillar's intent-heavy audience |
-| Transparent pricing differentiator | Text post with a simple comparison table as an image | Screenshot the pricing table from the marketing site or `docs/DataFe_Pricing_Strategy.docx` directly - real numbers, not a claim, is the whole point |
+| Transparent pricing differentiator | Text post with a simple comparison table as an image | Screenshot the pricing table from the marketing site or `docs/DatFe_Pricing_Strategy.docx` directly - real numbers, not a claim, is the whole point |
 | Product-led proof | Short video or screen-recording (30-60 sec) if feasible, otherwise a single annotated screenshot | Showing the Ask assistant or lineage view actually working beats describing it |
 
 Changelog posts (from the content plan) are the simplest recurring
@@ -98,12 +98,12 @@ can predict will keep posting.
 ## 4. Starting posts (ready to use or adapt)
 
 Five drafts, one per pillar plus a launch post, written in the voice
-documented in `docs/DataFe_Brand_Guidelines.docx` - plainspoken,
+documented in `docs/DatFe_Brand_Guidelines.docx` - plainspoken,
 concrete, a little wry, never flippant about the real problem.
 
 ### Launch post
 
-> We just put DataFe's pricing on a public page. All of it - no "contact sales" wall.
+> We just put DatFe's pricing on a public page. All of it - no "contact sales" wall.
 >
 > Every catalog/governance tool in this space (Collibra, Atlan, Select Star, the rest) makes you talk to someone before you find out what it costs. We think that's backwards for a 20-300 person company trying to figure out if this is even worth evaluating.
 >
@@ -119,7 +119,7 @@ concrete, a little wry, never flippant about the real problem.
 >
 > Forty minutes and six replies later, they have an answer - and a slightly worse first impression of how the company runs its data.
 >
-> This isn't a tooling problem you fix with more Slack channels. It's a documentation-doesn't-exist problem. That's the actual, boring, unglamorous thing a data catalog is for - and it's the whole reason we built DataFe.
+> This isn't a tooling problem you fix with more Slack channels. It's a documentation-doesn't-exist problem. That's the actual, boring, unglamorous thing a data catalog is for - and it's the whole reason we built DatFe.
 
 ### DPDP/GDPR pillar post (carousel intro text)
 
@@ -131,19 +131,19 @@ concrete, a little wry, never flippant about the real problem.
 
 ### Pricing differentiator pillar post
 
-> We priced DataFe against what a real 20-50 person company would actually pay elsewhere. The gap surprised even us.
+> We priced DatFe against what a real 20-50 person company would actually pay elsewhere. The gap surprised even us.
 >
 > [attach: comparison table image]
 >
 > Collibra: not viable below enterprise scale, sales-led, opaque pricing.
 > Atlan: free for one person, then $25k-50k/yr once your actual team is on it.
-> DataFe: $0-1,200/yr for most small teams, ~$4,200/yr covers most 20-50 person companies.
+> DatFe: $0-1,200/yr for most small teams, ~$4,200/yr covers most 20-50 person companies.
 >
 > Same category. Very different assumption about who you are.
 
 ### Product-led proof pillar post
 
-> Someone on our team asked the DataFe Ask assistant "what's our most stale customer-facing table?" - not searched, asked, in plain English.
+> Someone on our team asked the DatFe Ask assistant "what's our most stale customer-facing table?" - not searched, asked, in plain English.
 >
 > It answered with the actual table, the actual last-scan date, and which dashboards depend on it - because it's grounded in the real catalog and lineage graph, not a canned FAQ.
 >
@@ -154,6 +154,6 @@ concrete, a little wry, never flippant about the real problem.
 ## 5. Growth basics for a solo-operator page
 
 - **Personal profile first**: your own posts (as Soumick) reach further early on than the Company Page's posts do - LinkedIn's algorithm favors personal accounts. Post from your profile, tag/mention the Company Page, and have the page repost/share it rather than treating the Company Page as the primary publishing account.
-- **Employee association**: make sure your personal profile lists DataFe as your current position, linked to the Company Page - this is what populates the "employees" count and gives the page any credibility signal at all in its first months.
+- **Employee association**: make sure your personal profile lists DatFe as your current position, linked to the Company Page - this is what populates the "employees" count and gives the page any credibility signal at all in its first months.
 - **Comment on relevant posts** in the data/governance space (Atlan's, Select Star's, and others' posts, relevant hashtags like #datagovernance, #dataengineering) with genuine, specific comments - not "great post!" - before expecting inbound engagement on your own posts.
 - **No follower buying, no engagement pods** - both violate LinkedIn's terms and produce an audience that doesn't convert; given the actual buyer here is a specific, findable job title, quality of following matters far more than count.

@@ -8,7 +8,7 @@ set -e
 echo "Running database migrations..."
 alembic upgrade head
 
-echo "Starting DataFe backend..."
+echo "Starting DatFe backend..."
 # --proxy-headers/--forwarded-allow-ips: this backend is only ever
 # reached through the frontend/nginx layer (never exposed directly -
 # see docker-compose.yml), so it's safe to trust X-Forwarded-* headers

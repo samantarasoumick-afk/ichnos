@@ -5,7 +5,7 @@ import { Suspense, useEffect, useState } from "react";
 import { useSearchParams } from "next/navigation";
 
 import { useAuth } from "../../../../contexts/AuthContext";
-import { DataFeLogo } from "../../../../components/DataFeLogo";
+import { DatFeLogo } from "../../../../components/DatFeLogo";
 
 function GithubCallbackInner() {
   const { loginWithGithubCode } = useAuth();
@@ -58,7 +58,7 @@ function GithubCallbackInner() {
     <main className="min-h-screen flex items-center justify-center bg-gray-100 p-6">
       <div className="w-full max-w-sm bg-white rounded-xl shadow p-8 text-center">
         <div className="mb-4 flex justify-center">
-          <DataFeLogo size={30} textClassName="text-2xl font-bold" />
+          <DatFeLogo size={30} textClassName="text-2xl font-bold" />
         </div>
 
         {status === "verifying" ? (

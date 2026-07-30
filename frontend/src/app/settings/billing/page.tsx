@@ -209,7 +209,7 @@ export default function BillingPage() {
           {status.plan_status === "trialing" && (
             <div className="mt-4 rounded-lg bg-blue-50 p-3 text-sm text-blue-700">
               You&apos;re on a trial - every feature is unlocked so you can fully evaluate
-              DataFe. Upgrade below whenever you&apos;re ready to keep it after your trial.
+              DatFe. Upgrade below whenever you&apos;re ready to keep it after your trial.
             </div>
           )}
 
@@ -234,7 +234,7 @@ export default function BillingPage() {
           {status && !status.stripe_configured && (
             <div className="mb-4 rounded-lg bg-gray-50 p-3 text-sm text-gray-600">
               Self-serve billing isn&apos;t configured on this instance yet. Contact
-              whoever runs this DataFe instance to upgrade your plan.
+              whoever runs this DatFe instance to upgrade your plan.
             </div>
           )}
 
@@ -273,7 +273,7 @@ export default function BillingPage() {
                 Unlimited sources and seats, SSO, dedicated support. Custom pricing.
               </div>
               <a
-                href="mailto:samantara.soumick@gmail.com?subject=DataFe%20Enterprise"
+                href="mailto:samantara.soumick@gmail.com?subject=DatFe%20Enterprise"
                 className="mt-4 inline-block rounded-lg border px-3 py-2 text-sm hover:bg-gray-50"
               >
                 Talk to sales

@@ -295,7 +295,7 @@ def _try_llm_answer(
         return None
 
     system_prompt = (
-        "You are the embedded assistant inside DataFe, a data catalog and "
+        "You are the embedded assistant inside DatFe, a data catalog and "
         "governance platform. Answer the user's question using ONLY the "
         "catalog context provided below - never invent dataset names, "
         "owners, scores, or relationships that aren't present in it. If "

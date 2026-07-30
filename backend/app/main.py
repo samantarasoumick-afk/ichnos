@@ -178,7 +178,7 @@ if os.getenv("DEMO_SEED", "false").lower() == "true":
     seed_demo_data()
 
 app = FastAPI(
-    title="DataFe",
+    title="DatFe",
     version="0.2.0"
 )
 

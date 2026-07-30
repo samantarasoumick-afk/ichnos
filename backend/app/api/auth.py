@@ -311,9 +311,9 @@ def request_magic_link(
 
     send_email(
         to=existing_user.email,
-        subject="Your DataFe login link",
+        subject="Your DatFe login link",
         body=(
-            "Click the link below to sign in to DataFe. It expires in "
+            "Click the link below to sign in to DatFe. It expires in "
             f"{MAGIC_LINK_EXPIRE_MINUTES} minutes and can only be used once.\n\n"
             f"{login_url}\n\n"
             "If you didn't request this, you can safely ignore this email - "

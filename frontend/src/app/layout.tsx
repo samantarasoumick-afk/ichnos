@@ -8,7 +8,7 @@ import { AuthProvider } from "../contexts/AuthContext";
 import { TourProvider } from "../contexts/TourContext";
 
 export const metadata: Metadata = {
-  title: "DataFe",
+  title: "DatFe",
   description: "Metadata intelligence and governance platform",
 };
 

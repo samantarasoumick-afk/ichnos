@@ -258,7 +258,7 @@ def _build_narrative(levels: list[dict], edges: list[dict], direction: str, targ
         )
 
     system_prompt = (
-        "You are the embedded assistant inside DataFe, a data catalog and governance platform, "
+        "You are the embedded assistant inside DatFe, a data catalog and governance platform, "
         "helping a newly onboarded analyst understand where a report or dataset's data actually "
         "comes from (or where it flows to). Using ONLY the structured trace data below, write a "
         "short, plain-English walkthrough, hop by hop, from " + ("origin to this dataset" if direction == DIRECTION_UPSTREAM else "this dataset to where it ends up") + ". "

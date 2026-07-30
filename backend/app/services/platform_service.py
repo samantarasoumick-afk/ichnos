@@ -2,7 +2,7 @@
 Cross-organization rollups for the platform admin dashboard - the one
 place in the codebase allowed to query across every tenant at once.
 Every other service/API in this app deliberately filters by
-organization_id; this module exists specifically so DataFe's own
+organization_id; this module exists specifically so DatFe's own
 operator can see "who's using this thing" across 100+ demo/trial
 orgs without logging into each one individually. Gated entirely by
 require_platform_admin (app/auth/dependencies.py) - nothing here is
