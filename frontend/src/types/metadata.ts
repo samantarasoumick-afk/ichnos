@@ -784,11 +784,59 @@ export type EcosystemSourceEdge = {
   downstream_source_id: string;
 };
 
+// --- Governance layer: business processes and glossary terms are
+// many-to-many linked to datasets, so (like sources) they get their
+// own node lists plus the edges connecting them to whichever datasets
+// they touch. Contracts are NOT a linked node type - a contract
+// belongs to exactly one dataset (already reflected in that dataset's
+// contract_status) - but the full list is included so the panel can
+// show version/owner/breach detail without a second round-trip.
+
+export type EcosystemProcessNode = {
+  id: string;
+  name: string;
+  description?: string | null;
+  owner?: string | null;
+  dataset_ids: string[];
+};
+
+export type EcosystemProcessEdge = {
+  process_id: string;
+  dataset_id: string;
+};
+
+export type EcosystemGlossaryTermNode = {
+  id: string;
+  term: string;
+  domain?: string | null;
+  dataset_ids: string[];
+};
+
+export type EcosystemGlossaryEdge = {
+  term_id: string;
+  dataset_id: string;
+};
+
+export type EcosystemContractSummary = {
+  id: string;
+  dataset_id: string;
+  version: string;
+  status: string;
+  owner?: string | null;
+  last_status?: string | null;
+  last_breach_details?: string | null;
+};
+
 export type EcosystemGraph = {
   sources: EcosystemSourceNode[];
   source_edges: EcosystemSourceEdge[];
   datasets: EcosystemDatasetNode[];
   edges: EcosystemDatasetEdge[];
+  processes: EcosystemProcessNode[];
+  process_edges: EcosystemProcessEdge[];
+  glossary_terms: EcosystemGlossaryTermNode[];
+  glossary_edges: EcosystemGlossaryEdge[];
+  contracts: EcosystemContractSummary[];
 };
 
 // --- "Trace this dashboard" provenance explainer ---

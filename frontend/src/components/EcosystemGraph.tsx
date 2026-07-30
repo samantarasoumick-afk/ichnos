@@ -13,14 +13,18 @@ import ReactFlow, {
 
 import type {
   EcosystemDatasetNode,
+  EcosystemGlossaryTermNode,
   EcosystemGraph as EcosystemGraphData,
+  EcosystemProcessNode,
   EcosystemSourceNode,
   EcosystemTier,
 } from "../types/metadata";
 
 export type EcosystemSelection =
   | { kind: "source"; source: EcosystemSourceNode }
-  | { kind: "dataset"; dataset: EcosystemDatasetNode };
+  | { kind: "dataset"; dataset: EcosystemDatasetNode }
+  | { kind: "process"; process: EcosystemProcessNode }
+  | { kind: "glossary_term"; term: EcosystemGlossaryTermNode };
 
 type Props = {
   graph: EcosystemGraphData;
@@ -54,6 +58,20 @@ const GOVERNANCE_DOT: Record<string, string> = {
   CRITICAL: "#ef4444",
   REVIEW_REQUIRED: "#f59e0b",
   HEALTHY: "#22c55e",
+};
+
+// The governance layer (processes, glossary terms) cuts across the
+// front/middle/back-office tiers rather than living in one of them, so
+// it gets its own two columns to the right of the tier columns, styled
+// distinctly from TIER_STYLE so it reads as "a different kind of
+// node" rather than a sixth tier.
+const PROCESS_STYLE = { background: "#eef2ff", border: "#6366f1", label: "Business processes" };
+const GLOSSARY_STYLE = { background: "#ecfeff", border: "#06b6d4", label: "Glossary terms" };
+
+const CONTRACT_BADGE: Record<string, { label: string; color: string }> = {
+  COMPLIANT: { label: "Contract OK", color: "#22c55e" },
+  BREACHED: { label: "Contract breached", color: "#ef4444" },
+  PENDING_EVALUATION: { label: "Contract pending", color: "#f59e0b" },
 };
 
 function sourceHeaderNode(
@@ -108,10 +126,12 @@ function sourceHeaderNode(
 function datasetChildNode(
   dataset: EcosystemDatasetNode,
   position: { x: number; y: number },
-  selected: boolean
+  selected: boolean,
+  contractStatus: string | null | undefined
 ): Node {
   const style = TIER_STYLE[dataset.tier];
   const dot = dataset.governance_status ? GOVERNANCE_DOT[dataset.governance_status] : undefined;
+  const contractBadge = contractStatus ? CONTRACT_BADGE[contractStatus] : undefined;
 
   return {
     id: dataset.id,
@@ -130,6 +150,14 @@ function datasetChildNode(
             <span>&middot;</span>
             <span>DQ {dataset.quality_score ?? 0}</span>
           </div>
+          {contractBadge && (
+            <div
+              className="mt-1 inline-block rounded px-1.5 py-0.5 text-[9px] font-semibold uppercase"
+              style={{ background: `${contractBadge.color}1a`, color: contractBadge.color }}
+            >
+              {contractBadge.label}
+            </div>
+          )}
         </div>
       ),
     },
@@ -139,6 +167,69 @@ function datasetChildNode(
       color: selected ? "#fff" : undefined,
       borderRadius: 8,
       padding: 8,
+      width: 236,
+      fontSize: 12,
+      cursor: "pointer",
+    },
+  };
+}
+
+function processNode(process: EcosystemProcessNode, position: { x: number; y: number }, selected: boolean): Node {
+  return {
+    id: process.id,
+    position,
+    data: {
+      label: (
+        <div>
+          <div className="font-semibold">{process.name}</div>
+          <div className="mt-0.5 text-[10px] uppercase tracking-wide text-gray-500">Business process</div>
+          <div className="mt-1 text-xs text-gray-600">
+            {process.dataset_ids.length} dataset{process.dataset_ids.length === 1 ? "" : "s"} touched
+            {process.owner ? ` · ${process.owner}` : ""}
+          </div>
+        </div>
+      ),
+    },
+    style: {
+      border: `1.5px solid ${PROCESS_STYLE.border}`,
+      background: selected ? PROCESS_STYLE.border : PROCESS_STYLE.background,
+      color: selected ? "#fff" : undefined,
+      borderRadius: 8,
+      padding: 10,
+      width: 236,
+      fontSize: 12,
+      cursor: "pointer",
+    },
+  };
+}
+
+function glossaryTermNode(
+  term: EcosystemGlossaryTermNode,
+  position: { x: number; y: number },
+  selected: boolean
+): Node {
+  return {
+    id: term.id,
+    position,
+    data: {
+      label: (
+        <div>
+          <div className="font-semibold">{term.term}</div>
+          <div className="mt-0.5 text-[10px] uppercase tracking-wide text-gray-500">
+            Glossary term{term.domain ? ` · ${term.domain}` : ""}
+          </div>
+          <div className="mt-1 text-xs text-gray-600">
+            {term.dataset_ids.length} dataset{term.dataset_ids.length === 1 ? "" : "s"} tagged
+          </div>
+        </div>
+      ),
+    },
+    style: {
+      border: `1.5px solid ${GLOSSARY_STYLE.border}`,
+      background: selected ? GLOSSARY_STYLE.border : GLOSSARY_STYLE.background,
+      color: selected ? "#fff" : undefined,
+      borderRadius: 8,
+      padding: 10,
       width: 236,
       fontSize: 12,
       cursor: "pointer",
@@ -177,6 +268,11 @@ export default function EcosystemGraph({ graph, selectedId, onSelect, expanded, 
     return map;
   }, [graph.sources]);
 
+  const datasetById = new Map(graph.datasets.map((d) => [d.id, d]));
+  const processById = new Map(graph.processes.map((p) => [p.id, p]));
+  const termById = new Map(graph.glossary_terms.map((t) => [t.id, t]));
+  const contractByDatasetId = new Map(graph.contracts.map((c) => [c.dataset_id, c]));
+
   const nodes: Node[] = [];
 
   COLUMN_ORDER.forEach((tier, columnIndex) => {
@@ -204,7 +300,10 @@ export default function EcosystemGraph({ graph, selectedId, onSelect, expanded, 
       if (isExpanded) {
         const datasets = datasetsBySource.get(source.id) ?? [];
         datasets.forEach((dataset) => {
-          nodes.push(datasetChildNode(dataset, { x: x + 30, y: yCursor }, selectedId === dataset.id));
+          const contract = contractByDatasetId.get(dataset.id);
+          nodes.push(
+            datasetChildNode(dataset, { x: x + 30, y: yCursor }, selectedId === dataset.id, contract?.last_status)
+          );
           yCursor += DATASET_ROW_HEIGHT;
         });
       }
@@ -213,14 +312,28 @@ export default function EcosystemGraph({ graph, selectedId, onSelect, expanded, 
     });
   });
 
+  // The governance layer (processes, glossary terms) doesn't belong to
+  // any one tier, so it gets its own two columns past the tier columns
+  // rather than being squeezed into one of them.
+  const PROCESS_COLUMN = COLUMN_ORDER.length;
+  const GLOSSARY_COLUMN = COLUMN_ORDER.length + 1;
+
+  graph.processes.forEach((process, index) => {
+    const y = index * (HEADER_HEIGHT + ROW_GAP);
+    nodes.push(processNode(process, { x: PROCESS_COLUMN * COLUMN_WIDTH, y }, selectedId === process.id));
+  });
+
+  graph.glossary_terms.forEach((term, index) => {
+    const y = index * (HEADER_HEIGHT + ROW_GAP);
+    nodes.push(glossaryTermNode(term, { x: GLOSSARY_COLUMN * COLUMN_WIDTH, y }, selectedId === term.id));
+  });
+
   // A dataset resolves to its own node id if its source is expanded,
   // otherwise it collapses to its parent source's node id - this is
   // what makes edges re-target automatically on expand/collapse.
   function nodeIdForDataset(datasetId: string, sourceId: string): string {
     return expanded.has(sourceId) ? datasetId : sourceId;
   }
-
-  const datasetById = new Map(graph.datasets.map((d) => [d.id, d]));
 
   const edgeMap = new Map<string, { count: number; label: string }>();
   graph.edges.forEach((edge) => {
@@ -253,6 +366,46 @@ export default function EcosystemGraph({ graph, selectedId, onSelect, expanded, 
     };
   });
 
+  // Governance-layer edges (process/glossary -> dataset) reuse the
+  // same collapse-aware target resolution as lineage edges, but get a
+  // visually distinct (dashed, unanimated) style so they read as "this
+  // node touches that dataset" rather than "data flows this way".
+  const governanceEdgeIds = new Set<string>();
+
+  graph.process_edges.forEach((edge) => {
+    const dataset = datasetById.get(edge.dataset_id);
+    if (!dataset) return;
+    const target = nodeIdForDataset(dataset.id, dataset.source_id);
+    const key = `${edge.process_id}->${target}`;
+    if (governanceEdgeIds.has(key)) return;
+    governanceEdgeIds.add(key);
+    edges.push({
+      id: `process-${key}`,
+      source: edge.process_id,
+      target,
+      label: "process",
+      style: { stroke: PROCESS_STYLE.border, strokeDasharray: "4 3" },
+      labelStyle: { fill: PROCESS_STYLE.border, fontSize: 10 },
+    });
+  });
+
+  graph.glossary_edges.forEach((edge) => {
+    const dataset = datasetById.get(edge.dataset_id);
+    if (!dataset) return;
+    const target = nodeIdForDataset(dataset.id, dataset.source_id);
+    const key = `${edge.term_id}->${target}`;
+    if (governanceEdgeIds.has(key)) return;
+    governanceEdgeIds.add(key);
+    edges.push({
+      id: `term-${key}`,
+      source: edge.term_id,
+      target,
+      label: "term",
+      style: { stroke: GLOSSARY_STYLE.border, strokeDasharray: "4 3" },
+      labelStyle: { fill: GLOSSARY_STYLE.border, fontSize: 10 },
+    });
+  });
+
   function handleNodeClick(_event: React.MouseEvent, node: Node) {
     const dataset = datasetById.get(node.id);
     if (dataset) {
@@ -260,7 +413,17 @@ export default function EcosystemGraph({ graph, selectedId, onSelect, expanded, 
       return;
     }
     const source = graph.sources.find((s) => s.id === node.id);
-    if (source) onSelect({ kind: "source", source });
+    if (source) {
+      onSelect({ kind: "source", source });
+      return;
+    }
+    const process = processById.get(node.id);
+    if (process) {
+      onSelect({ kind: "process", process });
+      return;
+    }
+    const term = termById.get(node.id);
+    if (term) onSelect({ kind: "glossary_term", term });
   }
 
   return (
@@ -276,6 +439,20 @@ export default function EcosystemGraph({ graph, selectedId, onSelect, expanded, 
             {TIER_STYLE[tier].label}
           </span>
         ))}
+        <span className="flex items-center gap-1">
+          <span
+            className="inline-block h-3 w-3 rounded-sm"
+            style={{ background: PROCESS_STYLE.background, border: `1px solid ${PROCESS_STYLE.border}` }}
+          />
+          {PROCESS_STYLE.label}
+        </span>
+        <span className="flex items-center gap-1">
+          <span
+            className="inline-block h-3 w-3 rounded-sm"
+            style={{ background: GLOSSARY_STYLE.background, border: `1px solid ${GLOSSARY_STYLE.border}` }}
+          />
+          {GLOSSARY_STYLE.label}
+        </span>
       </div>
 
       <div className="h-[640px] rounded-lg border bg-white">

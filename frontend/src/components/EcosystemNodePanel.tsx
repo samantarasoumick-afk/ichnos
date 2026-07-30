@@ -265,6 +265,65 @@ export default function EcosystemNodePanel({ graph, selection, audience, onClose
     );
   }
 
+  if (selection.kind === "process") {
+    const process = selection.process;
+    const datasets = process.dataset_ids
+      .map((id) => datasetById.get(id))
+      .filter((d): d is EcosystemDatasetNode => Boolean(d));
+
+    return (
+      <div className="rounded-xl border bg-white p-5">
+        <div className="mb-3 flex items-start justify-between">
+          <div>
+            <div className="text-lg font-semibold">{process.name}</div>
+            <div className="text-xs uppercase tracking-wide text-gray-500">Business process</div>
+          </div>
+          <button onClick={onClose} className="text-sm text-gray-400 hover:text-gray-700">Close</button>
+        </div>
+
+        <div className="mb-4">
+          <Row label="Owner" value={process.owner || "Unowned"} />
+          <Row label="Datasets touched" value={process.dataset_ids.length} />
+        </div>
+
+        {process.description && <Sentence>{process.description}</Sentence>}
+
+        <div className="mt-3 border-t pt-3">
+          <EcosystemLineageList title="Datasets used by this process" datasets={datasets} onSelectDataset={onSelectDataset} />
+        </div>
+      </div>
+    );
+  }
+
+  if (selection.kind === "glossary_term") {
+    const term = selection.term;
+    const datasets = term.dataset_ids
+      .map((id) => datasetById.get(id))
+      .filter((d): d is EcosystemDatasetNode => Boolean(d));
+
+    return (
+      <div className="rounded-xl border bg-white p-5">
+        <div className="mb-3 flex items-start justify-between">
+          <div>
+            <div className="text-lg font-semibold">{term.term}</div>
+            <div className="text-xs uppercase tracking-wide text-gray-500">
+              Glossary term{term.domain ? ` · ${term.domain}` : ""}
+            </div>
+          </div>
+          <button onClick={onClose} className="text-sm text-gray-400 hover:text-gray-700">Close</button>
+        </div>
+
+        <div className="mb-4">
+          <Row label="Datasets tagged" value={term.dataset_ids.length} />
+        </div>
+
+        <div className="mt-3 border-t pt-3">
+          <EcosystemLineageList title="Datasets tagged with this term" datasets={datasets} onSelectDataset={onSelectDataset} />
+        </div>
+      </div>
+    );
+  }
+
   const dataset = selection.dataset;
 
   const upstream = graph.edges

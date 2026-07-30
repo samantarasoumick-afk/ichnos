@@ -87,7 +87,11 @@ export default function EcosystemPage() {
   const selectedId = selection
     ? selection.kind === "source"
       ? selection.source.id
-      : selection.dataset.id
+      : selection.kind === "dataset"
+      ? selection.dataset.id
+      : selection.kind === "process"
+      ? selection.process.id
+      : selection.term.id
     : null;
 
   const stats = useMemo(() => {
@@ -97,6 +101,9 @@ export default function EcosystemPage() {
       datasets: graph.datasets.length,
       hops: graph.edges.length,
       pii: graph.datasets.reduce((sum, d) => sum + (d.pii_columns ?? 0), 0),
+      processes: graph.processes.length,
+      glossaryTerms: graph.glossary_terms.length,
+      breachedContracts: graph.contracts.filter((c) => c.last_status === "BREACHED").length,
     };
   }, [graph]);
 
@@ -161,6 +168,9 @@ export default function EcosystemPage() {
               <span><strong className="text-gray-900">{stats?.datasets}</strong> datasets</span>
               <span><strong className="text-gray-900">{stats?.hops}</strong> lineage hops</span>
               <span><strong className="text-gray-900">{stats?.pii}</strong> PII columns tracked</span>
+              <span><strong className="text-gray-900">{stats?.processes}</strong> business processes</span>
+              <span><strong className="text-gray-900">{stats?.glossaryTerms}</strong> glossary terms</span>
+              <span><strong className="text-gray-900">{stats?.breachedContracts}</strong> breached contracts</span>
             </div>
 
             <div className="flex items-center gap-2">
