@@ -112,6 +112,17 @@ class User(Base):
         nullable=False
     )
 
+    # JSON-encoded array of metric keys this user has chosen to see on
+    # their home dashboard, e.g. '["total_datasets", "high_risk", ...]'.
+    # Null means "no preference set yet" - the frontend falls back to
+    # the original default set of 5 KPI cards rather than showing an
+    # empty dashboard. Per-user, not per-organization: two people on
+    # the same team can each curate their own view.
+    dashboard_metrics = Column(
+        String,
+        nullable=True
+    )
+
     organization = relationship(
         "Organization",
         back_populates="users"

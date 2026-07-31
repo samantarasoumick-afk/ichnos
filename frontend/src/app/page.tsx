@@ -14,10 +14,19 @@ import api from "../services/api";
 
 import type {
   Dataset,
+  GovernanceOverview,
   GovernanceThread,
+  MaturityOverview,
+  PrivacyOverview,
   Source
 } from "../types/metadata";
 import { getOverallHealth, HEALTH_STYLES } from "../utils/datasetHealth";
+import {
+  DEFAULT_METRIC_IDS,
+  METRIC_BY_ID,
+  METRIC_CATALOG,
+  toneClasses,
+} from "../lib/dashboardMetrics";
 import { stewardshipGaps } from "../utils/stewardshipGaps";
 
 function isOperationalAlert(dataset: Dataset) {
@@ -46,6 +55,19 @@ export default function Home() {
   const [datasets, setDatasets] = useState<Dataset[]>([]);
 
   const [openThreadCounts, setOpenThreadCounts] = useState<Record<string, number>>({});
+
+  const [governanceOverview, setGovernanceOverview] = useState<GovernanceOverview | null>(null);
+  const [maturityOverview, setMaturityOverview] = useState<MaturityOverview | null>(null);
+  const [privacyOverview, setPrivacyOverview] = useState<PrivacyOverview | null>(null);
+
+  // Which KPI cards this user wants on their dashboard, out of
+  // everything the platform computes (see lib/dashboardMetrics.ts).
+  // Starts as the original default 5 so existing users see no change
+  // until their saved preference (if any) loads in.
+  const [selectedMetricIds, setSelectedMetricIds] = useState<string[]>(DEFAULT_METRIC_IDS);
+  const [showMetricPicker, setShowMetricPicker] = useState(false);
+  const [pickerDraft, setPickerDraft] = useState<string[]>(DEFAULT_METRIC_IDS);
+  const [savingMetrics, setSavingMetrics] = useState(false);
 
   // Deep-linkable from the guided tour (?q=payments) - read once,
   // lazily, via window.location.search rather than useSearchParams()
@@ -150,10 +172,73 @@ export default function Home() {
       }
     }
 
+    // These three overview endpoints back the extra metrics in the
+    // customizable dashboard (lib/dashboardMetrics.ts) beyond the
+    // original 5 - all already used elsewhere in the app (Governance
+    // page, Privacy page) and open to every role, not just admins.
+    // Fetched independently of each other so one failing doesn't
+    // blank out metrics that don't need it.
+    async function fetchOverviews() {
+      try {
+        const response = await api.get<GovernanceOverview>("/api/governance/overview");
+        setGovernanceOverview(response.data);
+      } catch (error) {
+        console.error(error);
+      }
+      try {
+        const response = await api.get<MaturityOverview>("/api/maturity");
+        setMaturityOverview(response.data);
+      } catch (error) {
+        console.error(error);
+      }
+      try {
+        const response = await api.get<PrivacyOverview>("/api/privacy/overview");
+        setPrivacyOverview(response.data);
+      } catch (error) {
+        console.error(error);
+      }
+    }
+
+    async function fetchDashboardMetricPreference() {
+      try {
+        const response = await api.get<{ metrics: string[] | null }>(
+          "/api/users/me/dashboard-metrics"
+        );
+        if (response.data.metrics !== null) {
+          setSelectedMetricIds(response.data.metrics);
+          setPickerDraft(response.data.metrics);
+        }
+      } catch (error) {
+        console.error(error);
+      }
+    }
+
     fetchMetadata();
     fetchOpenThreadCounts();
+    fetchOverviews();
+    fetchDashboardMetricPreference();
 
   }, [user]);
+
+  const metricContext = { datasets, governance: governanceOverview, maturity: maturityOverview, privacy: privacyOverview };
+
+  async function saveMetricPreference() {
+    setSavingMetrics(true);
+    try {
+      await api.put("/api/users/me/dashboard-metrics", { metrics: pickerDraft });
+      setSelectedMetricIds(pickerDraft);
+      setShowMetricPicker(false);
+    } catch (error) {
+      console.error(error);
+      alert("Failed to save your dashboard preference.");
+    } finally {
+      setSavingMetrics(false);
+    }
+  }
+
+  function toggleDraftMetric(id: string) {
+    setPickerDraft((prev) => (prev.includes(id) ? prev.filter((m) => m !== id) : [...prev, id]));
+  }
 
   const normalizedSearch = (
     search
@@ -397,97 +482,224 @@ export default function Home() {
 
       <TopNav />
 
-      <div className="mb-8">
-        <h1 className="text-4xl font-bold">DatFe</h1>
-        <p className="mt-1 text-gray-500">Metadata intelligence and governance platform</p>
+      <div className="mb-8 flex items-start justify-between gap-4">
+        <div>
+          <h1 className="text-4xl font-bold">DatFe</h1>
+          <p className="mt-1 text-gray-500">Metadata intelligence and governance platform</p>
+        </div>
+        <button
+          type="button"
+          onClick={() => {
+            setPickerDraft(selectedMetricIds);
+            setShowMetricPicker(true);
+          }}
+          className="shrink-0 rounded-lg border bg-white px-3 py-2 text-sm hover:bg-gray-50"
+        >
+          Customize metrics
+        </button>
       </div>
+
+      {showMetricPicker && (
+        <div className="mb-8 rounded-xl border bg-white p-5 shadow">
+          <div className="mb-3 flex items-center justify-between">
+            <div>
+              <h2 className="text-lg font-semibold">Choose your dashboard metrics</h2>
+              <p className="text-sm text-gray-500">
+                Pick whichever of DatFe&apos;s computed metrics matter to you - everything else stays
+                available, just off your dashboard.
+              </p>
+            </div>
+            <div className="flex shrink-0 gap-2">
+              <button
+                type="button"
+                onClick={() => setShowMetricPicker(false)}
+                className="rounded-lg border px-3 py-1.5 text-sm hover:bg-gray-50"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={saveMetricPreference}
+                disabled={savingMetrics}
+                className="rounded-lg bg-black px-3 py-1.5 text-sm text-white hover:bg-gray-800 disabled:opacity-50"
+              >
+                {savingMetrics ? "Saving..." : "Save"}
+              </button>
+            </div>
+          </div>
+
+          {(["Catalog", "Governance", "Quality", "Privacy & Risk", "Contracts", "Maturity"] as const).map(
+            (group) => {
+              const metricsInGroup = METRIC_CATALOG.filter((metric) => metric.group === group);
+              if (metricsInGroup.length === 0) return null;
+              return (
+                <div key={group} className="mb-4">
+                  <div className="mb-1.5 text-xs font-semibold uppercase tracking-wide text-gray-400">
+                    {group}
+                  </div>
+                  <div className="grid grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-3">
+                    {metricsInGroup.map((metric) => (
+                      <label
+                        key={metric.id}
+                        title={metric.description}
+                        className="flex items-start gap-2 rounded-lg border px-3 py-2 text-sm hover:bg-gray-50"
+                      >
+                        <input
+                          type="checkbox"
+                          className="mt-0.5"
+                          checked={pickerDraft.includes(metric.id)}
+                          onChange={() => toggleDraftMetric(metric.id)}
+                        />
+                        <span>
+                          <span className="block font-medium text-gray-900">{metric.label}</span>
+                          <span className="block text-xs text-gray-500">{metric.description}</span>
+                        </span>
+                      </label>
+                    ))}
+                  </div>
+                </div>
+              );
+            }
+          )}
+        </div>
+      )}
 
       <div className="grid grid-cols-1 md:grid-cols-3 xl:grid-cols-5 gap-6 mb-8">
 
-        <button
-          type="button"
-          onClick={() => setQuickFilter("ALL")}
-          title="Show all datasets"
-          className={`text-left bg-white rounded-xl p-6 shadow transition hover:shadow-md ${
-            quickFilter === "ALL" ? "ring-2 ring-black" : ""
-          }`}
-        >
-            <div className="text-sm text-gray-500">
-            Total Datasets
-            </div>
+        {selectedMetricIds.length === 0 && (
+          <div className="col-span-full rounded-xl border border-dashed bg-white p-6 text-center text-sm text-gray-500">
+            No metrics selected. Click &quot;Customize metrics&quot; above to add some.
+          </div>
+        )}
 
-            <div className="text-4xl font-bold mt-2">
-            {totalDatasets}
-            </div>
-        </button>
+        {selectedMetricIds.includes("total_datasets") && (
+          <button
+            type="button"
+            onClick={() => setQuickFilter("ALL")}
+            title="Show all datasets"
+            className={`text-left bg-white rounded-xl p-6 shadow transition hover:shadow-md ${
+              quickFilter === "ALL" ? "ring-2 ring-black" : ""
+            }`}
+          >
+              <div className="text-sm text-gray-500">
+              Total Datasets
+              </div>
 
-        <button
-          type="button"
-          onClick={() => toggleQuickFilter("HIGH_RISK")}
-          title="Show only high-sensitivity datasets"
-          className={`text-left bg-white rounded-xl p-6 shadow transition hover:shadow-md ${
-            quickFilter === "HIGH_RISK" ? "ring-2 ring-red-500" : ""
-          }`}
-        >
-            <div className="text-sm text-gray-500">
-            High Risk
-            </div>
+              <div className="text-4xl font-bold mt-2">
+              {totalDatasets}
+              </div>
+          </button>
+        )}
 
-            <div className="text-4xl font-bold mt-2 text-red-600">
-            {highRiskDatasets}
-            </div>
-        </button>
+        {selectedMetricIds.includes("high_risk_datasets") && (
+          <button
+            type="button"
+            onClick={() => toggleQuickFilter("HIGH_RISK")}
+            title="Show only high-sensitivity datasets"
+            className={`text-left bg-white rounded-xl p-6 shadow transition hover:shadow-md ${
+              quickFilter === "HIGH_RISK" ? "ring-2 ring-red-500" : ""
+            }`}
+          >
+              <div className="text-sm text-gray-500">
+              High Risk
+              </div>
 
-        <button
-          type="button"
-          onClick={() => toggleQuickFilter("HAS_PII")}
-          title="Show only datasets with PII columns"
-          className={`text-left bg-white rounded-xl p-6 shadow transition hover:shadow-md ${
-            quickFilter === "HAS_PII" ? "ring-2 ring-orange-500" : ""
-          }`}
-        >
-            <div className="text-sm text-gray-500">
-            PII Columns
-            </div>
+              <div className="text-4xl font-bold mt-2 text-red-600">
+              {highRiskDatasets}
+              </div>
+          </button>
+        )}
 
-            <div className="text-4xl font-bold mt-2 text-orange-600">
-            {totalPIIColumns}
-            </div>
-        </button>
+        {selectedMetricIds.includes("pii_columns") && (
+          <button
+            type="button"
+            onClick={() => toggleQuickFilter("HAS_PII")}
+            title="Show only datasets with PII columns"
+            className={`text-left bg-white rounded-xl p-6 shadow transition hover:shadow-md ${
+              quickFilter === "HAS_PII" ? "ring-2 ring-orange-500" : ""
+            }`}
+          >
+              <div className="text-sm text-gray-500">
+              PII Columns
+              </div>
 
-        <button
-          type="button"
-          onClick={() => toggleQuickFilter("GOVERNANCE_ALERT")}
-          title="Show only datasets that aren't governance-healthy"
-          className={`text-left bg-white rounded-xl p-6 shadow transition hover:shadow-md ${
-            quickFilter === "GOVERNANCE_ALERT" ? "ring-2 ring-yellow-500" : ""
-          }`}
-        >
-            <div className="text-sm text-gray-500">
-            Governance Alerts
-            </div>
+              <div className="text-4xl font-bold mt-2 text-orange-600">
+              {totalPIIColumns}
+              </div>
+          </button>
+        )}
 
-            <div className="text-4xl font-bold mt-2 text-yellow-600">
-            {unhealthyDatasets}
-            </div>
-        </button>
+        {selectedMetricIds.includes("governance_alerts") && (
+          <button
+            type="button"
+            onClick={() => toggleQuickFilter("GOVERNANCE_ALERT")}
+            title="Show only datasets that aren't governance-healthy"
+            className={`text-left bg-white rounded-xl p-6 shadow transition hover:shadow-md ${
+              quickFilter === "GOVERNANCE_ALERT" ? "ring-2 ring-yellow-500" : ""
+            }`}
+          >
+              <div className="text-sm text-gray-500">
+              Governance Alerts
+              </div>
 
-        <button
-          type="button"
-          onClick={() => toggleQuickFilter("OPERATIONAL_ALERT")}
-          title="Show only datasets with an operational alert"
-          className={`text-left bg-white rounded-xl p-6 shadow transition hover:shadow-md ${
-            quickFilter === "OPERATIONAL_ALERT" ? "ring-2 ring-red-500" : ""
-          }`}
-        >
-            <div className="text-sm text-gray-500">
-            Operational Alerts
-            </div>
+              <div className="text-4xl font-bold mt-2 text-yellow-600">
+              {unhealthyDatasets}
+              </div>
+          </button>
+        )}
 
-            <div className="text-4xl font-bold mt-2 text-red-600">
-            {unstableDatasets}
-            </div>
-        </button>
+        {selectedMetricIds.includes("operational_alerts") && (
+          <button
+            type="button"
+            onClick={() => toggleQuickFilter("OPERATIONAL_ALERT")}
+            title="Show only datasets with an operational alert"
+            className={`text-left bg-white rounded-xl p-6 shadow transition hover:shadow-md ${
+              quickFilter === "OPERATIONAL_ALERT" ? "ring-2 ring-red-500" : ""
+            }`}
+          >
+              <div className="text-sm text-gray-500">
+              Operational Alerts
+              </div>
+
+              <div className="text-4xl font-bold mt-2 text-red-600">
+              {unstableDatasets}
+              </div>
+          </button>
+        )}
+
+        {selectedMetricIds
+          .filter((id) => !DEFAULT_METRIC_IDS.includes(id))
+          .map((id) => {
+            const metric = METRIC_BY_ID[id];
+            if (!metric) return null;
+            const { display, tone } = metric.getValue(metricContext);
+
+            const cardBody = (
+              <>
+                <div className="text-sm text-gray-500">{metric.label}</div>
+                <div className={`text-4xl font-bold mt-2 ${toneClasses(tone)}`}>{display}</div>
+              </>
+            );
+
+            if (metric.href) {
+              return (
+                <Link
+                  key={id}
+                  href={metric.href}
+                  title={metric.description}
+                  className="text-left bg-white rounded-xl p-6 shadow transition hover:shadow-md block"
+                >
+                  {cardBody}
+                </Link>
+              );
+            }
+
+            return (
+              <div key={id} title={metric.description} className="bg-white rounded-xl p-6 shadow">
+                {cardBody}
+              </div>
+            );
+          })}
 
 </div>
 

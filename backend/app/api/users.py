@@ -1,3 +1,5 @@
+import json
+
 from fastapi import APIRouter
 from fastapi import Depends
 from fastapi import HTTPException
@@ -8,6 +10,8 @@ from app.db.session import get_db
 
 from app.models.user import User
 
+from app.schemas.user import DashboardMetricsResponse
+from app.schemas.user import DashboardMetricsUpdate
 from app.schemas.user import TeamMemberInvite
 from app.schemas.user import TeamMemberResponse
 from app.schemas.user import TeamMemberUpdate
@@ -195,3 +199,55 @@ def update_team_member(
     db.refresh(member)
 
     return member
+
+
+@router.get(
+    "/me/dashboard-metrics",
+    response_model=DashboardMetricsResponse
+)
+def get_my_dashboard_metrics(
+    current_user: User = Depends(get_current_user)
+):
+    """
+    The current user's chosen home-dashboard KPI cards. `metrics: null`
+    means no preference has been saved yet - the frontend falls back
+    to its own default set rather than treating this as "show nothing."
+    """
+
+    if not current_user.dashboard_metrics:
+
+        return DashboardMetricsResponse(metrics=None)
+
+    try:
+
+        metrics = json.loads(current_user.dashboard_metrics)
+
+    except (TypeError, ValueError):
+
+        metrics = None
+
+    return DashboardMetricsResponse(metrics=metrics)
+
+
+@router.put(
+    "/me/dashboard-metrics",
+    response_model=DashboardMetricsResponse
+)
+def update_my_dashboard_metrics(
+    payload: DashboardMetricsUpdate,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """
+    Every user picks their own dashboard - no role restriction here,
+    unlike most other settings in this file. This only ever touches
+    the calling user's own row (current_user, not a user_id path
+    param), so there's nothing to authorize beyond being logged in.
+    """
+
+    current_user.dashboard_metrics = json.dumps(payload.metrics)
+
+    db.commit()
+    db.refresh(current_user)
+
+    return DashboardMetricsResponse(metrics=payload.metrics)

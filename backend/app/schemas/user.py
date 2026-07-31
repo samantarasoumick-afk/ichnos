@@ -78,3 +78,17 @@ class TeamMemberResponse(BaseModel):
 
     class Config:
         from_attributes = True
+
+
+class DashboardMetricsUpdate(BaseModel):
+
+    # The full set of metric keys the user wants to see, in display
+    # order. An empty list is a valid, deliberate choice ("show none of
+    # the KPI cards") - distinct from never having set a preference at
+    # all, which is what None/column-not-set means server-side.
+    metrics: list[str] = Field(default_factory=list)
+
+
+class DashboardMetricsResponse(BaseModel):
+
+    metrics: Optional[list[str]] = None
