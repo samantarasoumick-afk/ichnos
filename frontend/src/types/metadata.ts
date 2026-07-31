@@ -408,9 +408,18 @@ export type UpstreamContractBreach = {
 };
 
 export type AskSource = {
-  type: "dataset" | "glossary_term" | "source" | "process";
+  // Reuses SearchResultType rather than its own narrower union - the
+  // semantic-search fallback (assistant_service.py's
+  // _answer_via_semantic_search) covers the exact same 8 entity types
+  // GET /api/search does now, via the same describe_document() helper.
+  type: SearchResultType;
   id: string;
   label: string;
+  // Populated only by the semantic-search fallback (see the backend
+  // comment on AskSource.url) - undefined for the hand-built intent
+  // handlers (ownership/quality/glossary/...), which the frontend
+  // still routes by `type` as before.
+  url?: string;
 };
 
 export type AskFollowUpSuggestion = {

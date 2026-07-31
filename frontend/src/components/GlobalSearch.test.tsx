@@ -10,10 +10,11 @@ jest.mock("next/navigation", () => ({
 
 jest.mock("../services/api", () => ({
   __esModule: true,
-  default: { get: jest.fn() },
+  default: { get: jest.fn(), post: jest.fn() },
 }));
 
 const mockedGet = api.get as jest.Mock;
+const mockedPost = api.post as jest.Mock;
 
 function getSearchInput() {
   return screen.getByPlaceholderText(/Search everything/);
@@ -79,6 +80,7 @@ describe("GlobalSearch", () => {
   beforeEach(() => {
     pushMock.mockClear();
     mockedGet.mockReset();
+    mockedPost.mockReset();
   });
 
   it("does not show a dropdown before anything is typed", () => {
@@ -242,5 +244,68 @@ describe("GlobalSearch", () => {
     fireEvent.click(item);
 
     expect(input.value).toBe("@public.customers ");
+  });
+
+  it("also fetches a synthesized answer for a question-like query, alongside the normal entity search", async () => {
+    mockedGet.mockResolvedValue({ data: { results: RESULTS } });
+    mockedPost.mockResolvedValue({
+      data: {
+        answer: "public.customers is owned by Growth Team.",
+        sources: [{ type: "dataset", id: "d1", label: "public.customers" }],
+        follow_up_suggestions: [],
+      },
+    });
+
+    render(<GlobalSearch />);
+    const input = getSearchInput();
+    fireEvent.change(input, { target: { value: "who owns customers?" } });
+
+    await waitFor(() =>
+      expect(mockedPost).toHaveBeenCalledWith("/api/assistant/ask", {
+        query: "who owns customers?",
+        history: [],
+      })
+    );
+
+    expect(await screen.findByText("Answer")).toBeInTheDocument();
+    expect(screen.getByText("public.customers is owned by Growth Team.")).toBeInTheDocument();
+    // The entity search still ran too - unified means both, not either/or.
+    expect(mockedGet).toHaveBeenCalledWith(
+      "/api/search",
+      expect.objectContaining({ params: { q: "who owns customers?", limit: 15 } })
+    );
+  });
+
+  it("does not fetch a synthesized answer for a plain (non-question) query", async () => {
+    mockedGet.mockResolvedValue({ data: { results: RESULTS } });
+
+    render(<GlobalSearch />);
+    const input = getSearchInput();
+    fireEvent.change(input, { target: { value: "customers" } });
+
+    await screen.findByText("public.customers");
+
+    expect(mockedPost).not.toHaveBeenCalled();
+    expect(screen.queryByText("Answer")).not.toBeInTheDocument();
+  });
+
+  it('navigates to the deep-linked Ask\'Fe\' page on "Continue in Ask\'Fe\'"', async () => {
+    mockedGet.mockResolvedValue({ data: { results: [] } });
+    mockedPost.mockResolvedValue({
+      data: {
+        answer: "public.customers is owned by Growth Team.",
+        sources: [],
+        follow_up_suggestions: [],
+      },
+    });
+
+    render(<GlobalSearch />);
+    const input = getSearchInput();
+    fireEvent.change(input, { target: { value: "who owns customers?" } });
+
+    const continueLink = await screen.findByText(/Continue in Ask'Fe'/);
+    fireEvent.click(continueLink);
+
+    expect(pushMock).toHaveBeenCalledWith("/ask?q=who%20owns%20customers%3F&autosubmit=1");
   });
 });

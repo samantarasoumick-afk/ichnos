@@ -5,10 +5,13 @@ import { useRouter } from "next/navigation";
 
 import EcosystemGraph, { type EcosystemSelection } from "../../components/EcosystemGraph";
 import EcosystemNodePanel from "../../components/EcosystemNodePanel";
+import SearchAnswerCard from "../../components/SearchAnswerCard";
 import TopNav from "../../components/TopNav";
 import { useRequireAuth } from "../../hooks/useRequireAuth";
 import api from "../../services/api";
+import { fetchInlineAnswer, isQuestionLike } from "../../utils/unifiedSearch";
 import type {
+  AskResponse,
   EcosystemDatasetNode,
   EcosystemGraph as EcosystemGraphData,
   EcosystemSourceNode,
@@ -75,6 +78,13 @@ export default function EcosystemPage() {
   const [searchQuery, setSearchQuery] = useState("");
   const [searchResults, setSearchResults] = useState<SearchResultItem[]>([]);
   const [searching, setSearching] = useState(false);
+
+  // Unified-search half of this page's own search box - same
+  // isQuestionLike/fetchInlineAnswer pair GlobalSearch uses, rendered
+  // via the same SearchAnswerCard. Kept independent of `searching` so
+  // a slower synthesized answer never holds up the entity list below it.
+  const [answer, setAnswer] = useState<AskResponse | null>(null);
+  const [asking, setAsking] = useState(false);
 
   useEffect(() => {
     if (!user) return;
@@ -276,8 +286,14 @@ export default function EcosystemPage() {
     const trimmed = searchQuery.trim();
     if (!trimmed) {
       setSearchResults([]);
+      setAnswer(null);
+      setAsking(false);
       return;
     }
+
+    const wantsAnswer = isQuestionLike(trimmed);
+    setAsking(wantsAnswer);
+    if (!wantsAnswer) setAnswer(null);
 
     setSearching(true);
     try {
@@ -288,6 +304,15 @@ export default function EcosystemPage() {
       setSearchResults([]);
     } finally {
       setSearching(false);
+    }
+
+    // Fired independently of the entity search above - a synthesized
+    // answer can take longer than a plain ranking, and the entity list
+    // shouldn't sit blank waiting for it.
+    if (wantsAnswer) {
+      const result = await fetchInlineAnswer(trimmed);
+      setAnswer(result);
+      setAsking(false);
     }
   }
 
@@ -460,6 +485,12 @@ export default function EcosystemPage() {
                 {searching ? "Searching..." : "Search"}
               </button>
             </div>
+
+            {(asking || answer) && (
+              <div className="mt-3 overflow-hidden rounded-lg border">
+                <SearchAnswerCard query={searchQuery.trim()} answer={answer} asking={asking} />
+              </div>
+            )}
 
             {searchResults.length > 0 && (
               <div className="mt-3 space-y-1">

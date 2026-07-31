@@ -369,6 +369,34 @@ def semantic_search(
     ]
 
 
+SNIPPET_MAX_LENGTH = 160
+
+
+def build_result_snippet(text: str, label: str) -> str:
+    """
+    Shared by app/api/search.py and assistant_service.py's semantic-
+    search fallback so a result reads identically - same trimming, same
+    max length - regardless of which surface (the search bar or Ask'Fe')
+    happened to render it. The label itself is already shown prominently
+    wherever this is used, so strip it out of the snippet if it's a
+    prefix of the corpus text (the common case, since every
+    _*_document() helper puts the name/title first) - that way the
+    snippet adds new information instead of repeating the label back.
+    """
+
+    remainder = text
+    if text.lower().startswith(label.lower()):
+        remainder = text[len(label):].strip()
+
+    if not remainder:
+        return ""
+
+    if len(remainder) <= SNIPPET_MAX_LENGTH:
+        return remainder
+
+    return remainder[:SNIPPET_MAX_LENGTH].rsplit(" ", 1)[0] + "..."
+
+
 def describe_document(document: CorpusDocument) -> tuple[str, str]:
     """
     A short type-specific subtitle plus the frontend route a result

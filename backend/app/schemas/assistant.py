@@ -1,3 +1,5 @@
+from typing import Optional
+
 from pydantic import BaseModel
 
 
@@ -25,6 +27,17 @@ class AskSource(BaseModel):
     type: str
     id: str
     label: str
+
+    # Populated when the answer came from the semantic-search fallback
+    # (see assistant_service.py's _answer_via_semantic_search), which
+    # covers all 8 catalog entity types via the same describe_document()
+    # helper GET /api/search uses - so the frontend can link straight to
+    # a risk/control/column/discussion result exactly, instead of only
+    # being able to guess a route for the handful of types the older,
+    # hand-built intent handlers (ownership/quality/glossary/...) know
+    # about. None for those handlers - the frontend falls back to its
+    # existing type-based routing in that case.
+    url: Optional[str] = None
 
 
 class AskFollowUpSuggestion(BaseModel):

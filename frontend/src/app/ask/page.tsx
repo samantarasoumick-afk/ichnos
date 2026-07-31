@@ -8,6 +8,7 @@ import TopNav from "../../components/TopNav";
 import { useMentionPicker } from "../../hooks/useMentionPicker";
 import { useRequireAuth } from "../../hooks/useRequireAuth";
 import api from "../../services/api";
+import { askSourceHref } from "../../utils/askSourceHref";
 import type { AskFollowUpSuggestion, AskResponse, AskSource, MentionItem } from "../../types/metadata";
 
 type ConversationEntry = {
@@ -25,19 +26,6 @@ const EXAMPLE_QUESTIONS = [
   "How's our governance maturity?",
   "Do we have any contract breaches?",
 ];
-
-function sourceHref(source: AskSource) {
-  if (source.type === "dataset") {
-    return `/datasets/${source.id}`;
-  }
-  if (source.type === "source") {
-    return `/ecosystem?sourceId=${source.id}`;
-  }
-  if (source.type === "process") {
-    return "/processes";
-  }
-  return "/governance";
-}
 
 export default function AskPage() {
   const { user, loading: authLoading } = useRequireAuth();
@@ -255,7 +243,7 @@ export default function AskPage() {
                     {entry.sources.map((source, index) => (
                       <Link
                         key={`${source.id}-${index}`}
-                        href={sourceHref(source)}
+                        href={askSourceHref(source)}
                         className="text-xs underline text-blue-700 hover:text-blue-900"
                       >
                         {source.label}

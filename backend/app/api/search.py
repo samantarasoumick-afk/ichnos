@@ -21,6 +21,7 @@ from app.schemas.search import SearchResultItem
 
 from app.auth.dependencies import get_current_user
 
+from app.services.catalog_search_service import build_result_snippet
 from app.services.catalog_search_service import describe_document
 from app.services.embedding_service import semantic_search
 from app.services.query_log_service import log_query_event
@@ -31,8 +32,6 @@ router = APIRouter(
     tags=["search"]
 )
 
-SNIPPET_MAX_LENGTH = 160
-
 # The three tiers a catalog search should treat as first-class: a
 # customer searching for a system name should get a source-level hit,
 # not just whichever individual dataset/column happens to rank
@@ -42,26 +41,6 @@ SNIPPET_MAX_LENGTH = 160
 # each of these three guarantees representation from every level of
 # the source -> dataset -> column hierarchy.
 CORE_TYPES: tuple[str, ...] = ("source", "dataset", "column")
-
-
-def _snippet(text: str, label: str) -> str:
-
-    # The label itself is already shown prominently - strip it out of
-    # the snippet if it's a prefix of the corpus text (the common
-    # case, since every _*_document() helper puts the name/title
-    # first) so the snippet adds new information instead of repeating
-    # the label back.
-    remainder = text
-    if text.lower().startswith(label.lower()):
-        remainder = text[len(label):].strip()
-
-    if not remainder:
-        return ""
-
-    if len(remainder) <= SNIPPET_MAX_LENGTH:
-        return remainder
-
-    return remainder[:SNIPPET_MAX_LENGTH].rsplit(" ", 1)[0] + "..."
 
 
 @router.get("", response_model=SearchResponse)
@@ -121,7 +100,7 @@ def search(
             id=result.document.id,
             label=result.document.label,
             subtitle=subtitle,
-            snippet=_snippet(result.document.text, result.document.label),
+            snippet=build_result_snippet(result.document.text, result.document.label),
             url=url,
             score=result.score,
         ))

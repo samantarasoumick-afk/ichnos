@@ -46,6 +46,8 @@ from app.models.source import DataSource
 
 from app.models.data_quality import DataQuality
 
+from app.services.catalog_search_service import build_result_snippet
+from app.services.catalog_search_service import describe_document
 from app.services.ecosystem_service import compute_source_rollup
 from app.services.embedding_service import semantic_search
 from app.services.lineage_quality_service import compute_effective_quality
@@ -1092,14 +1094,22 @@ def _answer_contract_question(datasets: list[Dataset], normalized_query: str) ->
 
 
 def _answer_via_semantic_search(db: Session, organization_id: str, query: str) -> dict:
+    """
+    The last-resort fallback: nothing above matched a known intent, so
+    rank the whole catalog against the raw query text and describe
+    whatever comes back closest. Deliberately unscoped to all 8 entity
+    types GET /api/search covers (source/dataset/column/glossary_term/
+    process/risk/control/discussion_thread) - it used to be hardcoded to
+    just dataset+glossary_term, which meant this fallback and the actual
+    search bar could disagree about whether something "exists" in the
+    catalog for the exact same query. Reuses describe_document() (the
+    same subtitle/url builder GET /api/search and the "@" mention picker
+    already share) and build_result_snippet() so a result reads
+    identically everywhere it shows up, one shared engine, not three
+    separate renderings of the same underlying match.
+    """
 
-    # Same scoping as _build_llm_context above - the snippet logic
-    # right below only knows dataset/glossary_term shapes.
-    results = semantic_search(
-        db, organization_id, query,
-        top_k=5,
-        doc_types=("dataset", "glossary_term"),
-    )
+    results = semantic_search(db, organization_id, query, top_k=5)
 
     if not results:
         return {
@@ -1116,16 +1126,12 @@ def _answer_via_semantic_search(db: Session, organization_id: str, query: str) -
     for result in results:
 
         doc = result.document
+        subtitle, url = describe_document(doc)
+        snippet = build_result_snippet(doc.text, doc.label)
 
-        if doc.doc_type == "dataset":
-            snippet = doc.ref.description or doc.ref.ai_summary or ""
-        else:
-            snippet = doc.ref.definition or ""
-
-        snippet = snippet.strip()[:140]
-
-        lines.append(f"- {doc.label}: {snippet}" if snippet else f"- {doc.label}")
-        sources.append({"type": doc.doc_type, "id": doc.id, "label": doc.label})
+        detail = " · ".join(bit for bit in (subtitle, snippet) if bit)
+        lines.append(f"- {doc.label}: {detail}" if detail else f"- {doc.label}")
+        sources.append({"type": doc.doc_type, "id": doc.id, "label": doc.label, "url": url})
 
     answer = "Here's what I found related to your question:\n" + "\n".join(lines)
 

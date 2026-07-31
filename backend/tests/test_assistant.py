@@ -520,6 +520,36 @@ class AssistantTests(unittest.TestCase):
         self.assertIn("Churn Rate", body["answer"])
         self.assertTrue(any(s["type"] == "glossary_term" for s in body["sources"]))
 
+    def test_fallback_semantic_search_covers_all_entity_types_with_urls(self):
+        # Regression test: the semantic-search fallback used to be
+        # hardcoded to dataset+glossary_term only, so a question that
+        # only matched something else (a risk, here) came back with
+        # "couldn't find anything" even though the exact same text
+        # would surface it fine in the regular /api/search bar - the
+        # two were quietly out of sync on what "exists" in the catalog.
+        # Also checks the new `url` field (populated via the same
+        # describe_document() helper /api/search uses) so a source from
+        # this fallback can be linked to directly rather than the
+        # frontend having to guess a route for a type it doesn't
+        # otherwise handle.
+        headers = self._register_and_login(f"a10b{self._n}@a.com", f"Assistant Org 10b {self._n}")
+        source_id = self._create_source(headers, f"S10b{self._n}")
+        self._scan(headers, source_id, ORDERS_SCAN_RESULT)
+
+        r = self.client.post("/api/risks", headers=headers, json={
+            "title": "Unmasked cardholder data in reporting layer",
+            "description": "Payment card numbers appear unmasked in the analytics warehouse.",
+            "category": "SECURITY",
+        })
+        self.assertEqual(r.status_code, 200, r.text)
+
+        body = self._ask(headers, "unmasked cardholder data reporting layer")
+        self.assertIn("Unmasked cardholder data", body["answer"])
+
+        risk_sources = [s for s in body["sources"] if s["type"] == "risk"]
+        self.assertTrue(risk_sources)
+        self.assertEqual(risk_sources[0]["url"], "/risks")
+
     def test_no_match_says_so(self):
         headers = self._register_and_login(f"a11{self._n}@a.com", f"Assistant Org 11 {self._n}")
         source_id = self._create_source(headers, f"S11{self._n}")
