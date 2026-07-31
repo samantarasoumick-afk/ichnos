@@ -45,6 +45,36 @@ const RESULTS = [
   },
 ];
 
+const TIERED_RESULTS = [
+  {
+    type: "source",
+    id: "s1",
+    label: "Salesforce CRM",
+    subtitle: "Source · postgresql · 2 datasets",
+    snippet: "",
+    url: "/ecosystem?sourceId=s1",
+    score: 0.9,
+  },
+  {
+    type: "dataset",
+    id: "d1",
+    label: "public.customers",
+    subtitle: "public",
+    snippet: "",
+    url: "/datasets/d1",
+    score: 0.8,
+  },
+  {
+    type: "column",
+    id: "c1",
+    label: "email",
+    subtitle: "Column · public.customers",
+    snippet: "",
+    url: "/datasets/d1?tab=columns&highlightColumn=c1",
+    score: 0.7,
+  },
+];
+
 describe("GlobalSearch", () => {
   beforeEach(() => {
     pushMock.mockClear();
@@ -70,7 +100,7 @@ describe("GlobalSearch", () => {
     await waitFor(() => expect(mockedGet).toHaveBeenCalledTimes(1));
     expect(mockedGet).toHaveBeenCalledWith(
       "/api/search",
-      expect.objectContaining({ params: { q: "customers", limit: 8 } })
+      expect.objectContaining({ params: { q: "customers", limit: 15 } })
     );
 
     expect(await screen.findByText("public.customers")).toBeInTheDocument();
@@ -117,6 +147,35 @@ describe("GlobalSearch", () => {
     fireEvent.keyDown(input, { key: "Enter" });
 
     expect(pushMock).toHaveBeenCalledWith("/risks");
+  });
+
+  it("groups results into Sources/Datasets/Columns sections in drill-down order", async () => {
+    mockedGet.mockResolvedValue({ data: { results: TIERED_RESULTS } });
+
+    render(<GlobalSearch />);
+    const input = getSearchInput();
+    fireEvent.change(input, { target: { value: "salesforce" } });
+
+    await screen.findByText("Salesforce CRM");
+
+    expect(screen.getByText("Sources")).toBeInTheDocument();
+    expect(screen.getByText("Datasets")).toBeInTheDocument();
+    expect(screen.getByText("Columns")).toBeInTheDocument();
+    expect(screen.getByText("public.customers")).toBeInTheDocument();
+    expect(screen.getByText("email")).toBeInTheDocument();
+  });
+
+  it("navigates to a source result's ecosystem url on click", async () => {
+    mockedGet.mockResolvedValue({ data: { results: TIERED_RESULTS } });
+
+    render(<GlobalSearch />);
+    const input = getSearchInput();
+    fireEvent.change(input, { target: { value: "salesforce" } });
+
+    const item = await screen.findByText("Salesforce CRM");
+    fireEvent.click(item);
+
+    expect(pushMock).toHaveBeenCalledWith("/ecosystem?sourceId=s1");
   });
 
   it("shows a no-matches message when the search returns nothing", async () => {

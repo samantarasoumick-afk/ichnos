@@ -1,6 +1,7 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { useRouter } from "next/navigation";
 
 import EcosystemGraph, { type EcosystemSelection } from "../../components/EcosystemGraph";
 import EcosystemNodePanel from "../../components/EcosystemNodePanel";
@@ -10,6 +11,7 @@ import api from "../../services/api";
 import type {
   EcosystemDatasetNode,
   EcosystemGraph as EcosystemGraphData,
+  EcosystemSourceNode,
   SearchResponse,
   SearchResultItem,
 } from "../../types/metadata";
@@ -29,6 +31,7 @@ const AUDIENCE_COPY: Record<Audience, { label: string; blurb: string }> = {
 
 export default function EcosystemPage() {
   const { user, loading: authLoading } = useRequireAuth();
+  const router = useRouter();
 
   const [graph, setGraph] = useState<EcosystemGraphData | null>(null);
   const [loading, setLoading] = useState(true);
@@ -84,6 +87,39 @@ export default function EcosystemPage() {
     applySelection({ kind: "dataset", dataset });
   }
 
+  function selectSource(source: EcosystemSourceNode) {
+    setExpanded((prev) => new Set(prev).add(source.id));
+    applySelection({ kind: "source", source });
+  }
+
+  // Deep-linkable from a "source" search result (GlobalSearch or this
+  // page's own search box both link here as /ecosystem?sourceId=...) -
+  // same one-time-effect-after-load pattern used elsewhere (e.g. the
+  // Ask page's ?q= deep link), guarded so it only ever fires once per
+  // page load rather than re-firing on every graph refetch.
+  const ranSourceDeepLinkRef = useRef(false);
+  useEffect(() => {
+    if (!graph || ranSourceDeepLinkRef.current) return;
+    ranSourceDeepLinkRef.current = true;
+
+    const sourceId = new URLSearchParams(window.location.search).get("sourceId");
+    if (!sourceId) return;
+
+    const source = graph.sources.find((s) => s.id === sourceId);
+    if (!source) return;
+
+    // Deferred a tick rather than called synchronously in the effect
+    // body (same reasoning as the Ask page's own ?q= deep link) -
+    // this is a one-time reaction to the URL once the graph has
+    // loaded, not state React should own the timing of. Inlined
+    // rather than calling selectSource() directly so this effect
+    // doesn't need that function in its dependency array.
+    queueMicrotask(() => {
+      setExpanded((prev) => new Set(prev).add(source.id));
+      applySelection({ kind: "source", source });
+    });
+  }, [graph]);
+
   const selectedId = selection
     ? selection.kind === "source"
       ? selection.source.id
@@ -116,7 +152,7 @@ export default function EcosystemPage() {
 
     setSearching(true);
     try {
-      const response = await api.get<SearchResponse>("/api/search", { params: { q: trimmed, limit: 6 } });
+      const response = await api.get<SearchResponse>("/api/search", { params: { q: trimmed, limit: 9 } });
       setSearchResults(response.data.results);
     } catch (error) {
       console.error(error);
@@ -127,9 +163,29 @@ export default function EcosystemPage() {
   }
 
   function openSearchResult(result: SearchResultItem) {
-    if (result.type !== "dataset" || !graph) return;
-    const dataset = graph.datasets.find((d) => d.id === result.id);
-    if (dataset) selectDataset(dataset);
+    // Source and dataset both drill in place - the ecosystem graph
+    // already has everything needed to render either as a node panel
+    // right here. Columns (and everything else - glossary/process/
+    // risk/control/discussion) don't have their own representation on
+    // this map, so those fall through to a real navigation via the
+    // result's own url instead.
+    if (result.type === "source" && graph) {
+      const source = graph.sources.find((s) => s.id === result.id);
+      if (source) {
+        selectSource(source);
+        return;
+      }
+    }
+
+    if (result.type === "dataset" && graph) {
+      const dataset = graph.datasets.find((d) => d.id === result.id);
+      if (dataset) {
+        selectDataset(dataset);
+        return;
+      }
+    }
+
+    router.push(result.url);
   }
 
   if (authLoading || !user) {
@@ -198,7 +254,9 @@ export default function EcosystemPage() {
             <p className="mb-3 text-xs text-gray-500">
               This searches by meaning, not just keyword match (real embeddings when Voyage AI is configured, a
               deterministic local fallback otherwise) - so &ldquo;where does churn risk get calculated&rdquo; can
-              surface the right dataset even without the exact table name.
+              surface the right dataset even without the exact table name. Matches a system name (e.g.
+              &ldquo;Salesforce&rdquo;) too - click it to drill straight into its datasets, then further into
+              columns from there.
             </p>
             <div className="flex gap-2">
               <input
@@ -226,8 +284,7 @@ export default function EcosystemPage() {
                     key={`${result.type}-${result.id}`}
                     type="button"
                     onClick={() => openSearchResult(result)}
-                    disabled={result.type !== "dataset"}
-                    className="flex w-full items-center justify-between rounded border px-3 py-2 text-left text-sm hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-50"
+                    className="flex w-full items-center justify-between rounded border px-3 py-2 text-left text-sm hover:bg-gray-50"
                   >
                     <span>
                       <span className="mr-2 rounded bg-gray-100 px-1.5 py-0.5 text-[10px] uppercase text-gray-600">

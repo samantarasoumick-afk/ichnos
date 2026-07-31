@@ -413,9 +413,15 @@ export type AskSource = {
   label: string;
 };
 
+export type AskFollowUpSuggestion = {
+  label: string;
+  query: string;
+};
+
 export type AskResponse = {
   answer: string;
   sources: AskSource[];
+  follow_up_suggestions: AskFollowUpSuggestion[];
 };
 
 export type ThreadType = "QUESTION" | "PROPOSAL" | "ISSUE";
@@ -578,6 +584,7 @@ export type RiskDetail = Risk & {
 };
 
 export type SearchResultType =
+  | "source"
   | "dataset"
   | "column"
   | "glossary_term"

@@ -7,9 +7,26 @@ import api from "../services/api";
 import { useMentionPicker } from "../hooks/useMentionPicker";
 import { ENTITY_TYPE_BADGE_CLASSES, ENTITY_TYPE_LABELS } from "./entityTypeStyles";
 import MentionDropdown from "./MentionDropdown";
-import type { MentionItem, SearchResponse, SearchResultItem } from "../types/metadata";
+import type { MentionItem, SearchResponse, SearchResultItem, SearchResultType } from "../types/metadata";
 
 const DEBOUNCE_MS = 250;
+
+// The three tiers of the catalog hierarchy get their own labeled
+// section, in drill-down order (system -> table -> field), so a
+// search for a source name reads as "here's the source, and here's
+// what's under it" rather than one flat, unordered list. Everything
+// else (glossary/process/risk/control/discussion) still shows up,
+// just grouped under one lighter-weight heading at the end.
+const RESULT_GROUPS: { key: string; label: string; types: SearchResultType[] }[] = [
+  { key: "source", label: "Sources", types: ["source"] },
+  { key: "dataset", label: "Datasets", types: ["dataset"] },
+  { key: "column", label: "Columns", types: ["column"] },
+  {
+    key: "other",
+    label: "More",
+    types: ["glossary_term", "process", "risk", "control", "discussion_thread"],
+  },
+];
 
 export default function GlobalSearch() {
   const router = useRouter();
@@ -71,7 +88,7 @@ export default function GlobalSearch() {
 
       try {
         const response = await api.get<SearchResponse>("/api/search", {
-          params: { q: trimmed, limit: 8 },
+          params: { q: trimmed, limit: 15 },
         });
 
         if (requestId === requestIdRef.current) {
@@ -120,20 +137,28 @@ export default function GlobalSearch() {
     });
   }
 
+  // Grouped in drill-down order (source -> dataset -> column -> more)
+  // rather than raw relevance order, so the dropdown reads as a
+  // hierarchy - keyboard nav and Enter-to-select both walk this same
+  // ordered list, not the flat `results` array straight off the API.
+  const orderedResults = RESULT_GROUPS.flatMap((group) =>
+    results.filter((result) => group.types.includes(result.type))
+  );
+
   function handleKeyDown(event: React.KeyboardEvent<HTMLInputElement>) {
     if (mention.handleKeyDown(event, selectMention)) return;
 
-    if (!open || results.length === 0) return;
+    if (!open || orderedResults.length === 0) return;
 
     if (event.key === "ArrowDown") {
       event.preventDefault();
-      setActiveIndex((prev) => (prev + 1) % results.length);
+      setActiveIndex((prev) => (prev + 1) % orderedResults.length);
     } else if (event.key === "ArrowUp") {
       event.preventDefault();
-      setActiveIndex((prev) => (prev <= 0 ? results.length - 1 : prev - 1));
+      setActiveIndex((prev) => (prev <= 0 ? orderedResults.length - 1 : prev - 1));
     } else if (event.key === "Enter") {
       event.preventDefault();
-      const target = activeIndex >= 0 ? results[activeIndex] : results[0];
+      const target = activeIndex >= 0 ? orderedResults[activeIndex] : orderedResults[0];
       if (target) selectResult(target);
     } else if (event.key === "Escape") {
       setOpen(false);
@@ -158,7 +183,7 @@ export default function GlobalSearch() {
         onFocus={() => setOpen(true)}
         onKeyDown={handleKeyDown}
         placeholder="Search everything... (type @ to reference something specific)"
-        aria-label="Search datasets, glossary, processes, risks, controls, and discussions"
+        aria-label="Search sources, datasets, columns, glossary, processes, risks, controls, and discussions"
         className="w-full rounded-lg border px-3 py-1.5 text-sm focus:outline-none focus:ring-1 focus:ring-black"
       />
 
@@ -184,30 +209,50 @@ export default function GlobalSearch() {
             </div>
           )}
 
-          {results.map((result, index) => (
-            <button
-              key={`${result.type}-${result.id}`}
-              type="button"
-              onMouseEnter={() => setActiveIndex(index)}
-              onClick={() => selectResult(result)}
-              className={`block w-full px-4 py-2 text-left ${
-                index === activeIndex ? "bg-gray-50" : ""
-              }`}
-            >
-              <div className="flex items-center gap-2">
-                <span
-                  className={`shrink-0 rounded px-1.5 py-0.5 text-[10px] font-medium uppercase ${ENTITY_TYPE_BADGE_CLASSES[result.type]}`}
-                >
-                  {ENTITY_TYPE_LABELS[result.type]}
-                </span>
-                <span className="truncate text-sm font-medium text-gray-900">{result.label}</span>
-              </div>
-              <div className="mt-0.5 truncate text-xs text-gray-500">{result.subtitle}</div>
-              {result.snippet && (
-                <div className="mt-0.5 line-clamp-1 text-xs text-gray-400">{result.snippet}</div>
-              )}
-            </button>
-          ))}
+          {(() => {
+            let runningIndex = -1;
+
+            return RESULT_GROUPS.map((group) => {
+              const groupResults = results.filter((result) => group.types.includes(result.type));
+              if (groupResults.length === 0) return null;
+
+              return (
+                <div key={group.key}>
+                  <div className="px-4 pb-1 pt-2 text-[10px] font-semibold uppercase tracking-wide text-gray-400">
+                    {group.label}
+                  </div>
+                  {groupResults.map((result) => {
+                    runningIndex += 1;
+                    const index = runningIndex;
+                    return (
+                      <button
+                        key={`${result.type}-${result.id}`}
+                        type="button"
+                        onMouseEnter={() => setActiveIndex(index)}
+                        onClick={() => selectResult(result)}
+                        className={`block w-full px-4 py-2 text-left ${
+                          index === activeIndex ? "bg-gray-50" : ""
+                        }`}
+                      >
+                        <div className="flex items-center gap-2">
+                          <span
+                            className={`shrink-0 rounded px-1.5 py-0.5 text-[10px] font-medium uppercase ${ENTITY_TYPE_BADGE_CLASSES[result.type]}`}
+                          >
+                            {ENTITY_TYPE_LABELS[result.type]}
+                          </span>
+                          <span className="truncate text-sm font-medium text-gray-900">{result.label}</span>
+                        </div>
+                        <div className="mt-0.5 truncate text-xs text-gray-500">{result.subtitle}</div>
+                        {result.snippet && (
+                          <div className="mt-0.5 line-clamp-1 text-xs text-gray-400">{result.snippet}</div>
+                        )}
+                      </button>
+                    );
+                  })}
+                </div>
+              );
+            });
+          })()}
         </div>
       )}
     </div>

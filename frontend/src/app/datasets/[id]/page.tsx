@@ -1,6 +1,6 @@
 "use client";
 
-import { Fragment, useEffect, useState } from "react";
+import { Fragment, useEffect, useRef, useState } from "react";
 import { useParams } from "next/navigation";
 
 import BusinessViewPanel from "../../../components/BusinessViewPanel";
@@ -287,6 +287,44 @@ export default function DatasetPage() {
     fetchAllDatasets();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [id, user]);
+
+  // Deep-linkable from a "column" search result
+  // (?tab=columns&highlightColumn=...) - expands that column's detail
+  // row and scrolls it into view once columns have loaded, the same
+  // one-time-effect-after-data-arrives pattern used for the Ask page's
+  // ?q= deep link. Guarded so it only ever fires once per page load.
+  const ranHighlightColumnRef = useRef(false);
+  useEffect(() => {
+    if (columns.length === 0 || ranHighlightColumnRef.current) return;
+
+    const highlightId = new URLSearchParams(window.location.search).get("highlightColumn");
+    if (!highlightId) return;
+
+    ranHighlightColumnRef.current = true;
+
+    const column = columns.find((c) => c.id === highlightId);
+    if (!column) return;
+
+    // Deferred a tick rather than called synchronously in the effect
+    // body, same reasoning as react-hooks/set-state-in-effect
+    // recommends (see the Ask page's own deep-link effect for the
+    // same pattern) - this is a one-time reaction to the URL/loaded
+    // columns, not state React should own the timing of.
+    queueMicrotask(() => {
+      setExpandedColumnId(column.id);
+      setColumnDescriptionDrafts((prev) => ({
+        ...prev,
+        [column.id]: prev[column.id] ?? column.description ?? "",
+      }));
+    });
+
+    requestAnimationFrame(() => {
+      document.getElementById(`column-row-${column.id}`)?.scrollIntoView({
+        behavior: "smooth",
+        block: "center",
+      });
+    });
+  }, [columns]);
 
   async function handleSaveGovernance() {
     if (!id) return;
@@ -602,7 +640,7 @@ export default function DatasetPage() {
 
                   return (
                     <Fragment key={column.id}>
-                      <tr className="border-b hover:bg-gray-50">
+                      <tr id={`column-row-${column.id}`} className="border-b hover:bg-gray-50">
                         <td className="py-3 font-medium">{column.name}</td>
                         <td className="py-3">{column.data_type}</td>
                         <td className="py-3">{column.nullable ? "YES" : "NO"}</td>
