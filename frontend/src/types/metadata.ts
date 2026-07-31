@@ -159,6 +159,9 @@ export type DatasetColumn = {
   confidence: number;
   detection_reason: string;
   recommendation: string;
+  dpdp_category?: string | null;
+  consent_required?: boolean;
+  classification_source?: "AUTO" | "MANUAL";
   description?: string | null;
   sample_values?: string | null;
   masked: boolean;

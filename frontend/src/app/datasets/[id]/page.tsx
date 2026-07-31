@@ -642,7 +642,7 @@ export default function DatasetPage() {
                       {isExpanded && (
                         <tr className="border-b bg-gray-50">
                           <td colSpan={6} className="px-3 py-4">
-                            <div className="grid grid-cols-1 gap-6 md:grid-cols-3">
+                            <div className="grid grid-cols-1 gap-6 md:grid-cols-4">
                               <div>
                                 <div className="mb-1 text-xs font-semibold text-gray-500">
                                   Description
@@ -764,6 +764,47 @@ export default function DatasetPage() {
                                     })}
                                   </div>
                                 )}
+                              </div>
+
+                              <div>
+                                <div className="mb-1 text-xs font-semibold text-gray-500">
+                                  Classification Detail
+                                </div>
+                                <div className="space-y-1.5 text-sm text-gray-600">
+                                  <div>
+                                    <span className="text-xs text-gray-500">Confidence: </span>
+                                    {typeof column.confidence === "number"
+                                      ? `${Math.round(column.confidence * 100)}%`
+                                      : "–"}
+                                  </div>
+                                  <div>
+                                    <span className="text-xs text-gray-500">Source: </span>
+                                    {column.classification_source === "MANUAL"
+                                      ? "Manually set by a steward"
+                                      : "Auto-detected"}
+                                  </div>
+                                  {column.dpdp_category && (
+                                    <div>
+                                      <span className="text-xs text-gray-500">DPDP category: </span>
+                                      {column.dpdp_category}
+                                    </div>
+                                  )}
+                                  {column.consent_required && (
+                                    <div className="text-xs font-medium text-amber-700">
+                                      Requires documented consent / lawful basis
+                                    </div>
+                                  )}
+                                  {column.detection_reason && (
+                                    <div className="text-xs text-gray-500">
+                                      {column.detection_reason}
+                                    </div>
+                                  )}
+                                  {column.recommendation && (
+                                    <div className="rounded border border-blue-100 bg-blue-50 px-2 py-1 text-xs text-blue-800">
+                                      {column.recommendation}
+                                    </div>
+                                  )}
+                                </div>
                               </div>
                             </div>
                           </td>
