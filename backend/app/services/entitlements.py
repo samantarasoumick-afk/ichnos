@@ -29,6 +29,8 @@ when any of these becomes an actual hard gate in the UI/API rather
 than just a pricing-page promise.
 """
 
+import os
+
 from dataclasses import dataclass
 from datetime import datetime, timedelta
 from typing import Optional
@@ -133,10 +135,13 @@ _ENTITLEMENTS = {
     # see the full product - the whole point of the demo-data seeder
     # built earlier is to showcase every feature, and a 1-source
     # starter cap would make that impossible for a brand-new signup.
-    # The one exception is ask_daily_limit: real Anthropic API spend
-    # happens on every Ask call regardless of trial status, so that
-    # stays capped (just more generously than starter) rather than
-    # left open - see enforce_ask_limit.
+    # The one exception is ask_daily_limit: when ANTHROPIC_API_KEY is
+    # configured, real Anthropic API spend happens on every Ask call
+    # regardless of trial status, so that stays capped (just more
+    # generously than starter) rather than left open. When no key is
+    # configured, enforce_ask_limit skips this cap entirely (it costs
+    # this app nothing to answer more questions), so the number here
+    # only matters for deployments that actually have a key set.
     "trial": PlanEntitlements(
         plan="trial",
         max_sources=None,
@@ -286,7 +291,20 @@ def enforce_ask_limit(db: Session, current_user) -> None:
     Counts today's QueryLog rows with source="ask" for this org -
     the same table the Search Insights report reads, so this doesn't
     need its own counter to stay in sync.
+
+    Skipped entirely when ANTHROPIC_API_KEY isn't configured. The whole
+    point of this cap is to guard against real Anthropic API spend
+    (assistant_service.py falls back to the LLM path only when a key is
+    set); without one, every Ask'Fe' question is answered by the free
+    deterministic intent handlers or the semantic-search fallback, so
+    there is no per-question cost this org's plan needs protecting
+    against, and capping it anyway just blocks a free feature for no
+    reason - a real reported issue (a trial org hit its 50/day cap while
+    no Anthropic key was ever configured for this deployment).
     """
+
+    if not os.getenv("ANTHROPIC_API_KEY"):
+        return
 
     from app.models.query_log import QueryLog  # local import, same reason as above
 

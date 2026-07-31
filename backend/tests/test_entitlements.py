@@ -9,9 +9,11 @@ direct DB access (same pattern test_login_lockout.py uses) to exercise
 the real, capped-down starter tier rather than the trial's open one.
 """
 
+import os
 import unittest
 import uuid
 from datetime import datetime, timedelta
+from unittest.mock import patch
 
 from fastapi.testclient import TestClient
 
@@ -202,6 +204,11 @@ class EntitlementsEnforcementTests(unittest.TestCase):
         self.assertEqual(r.status_code, 200, r.text)
 
     def test_ask_blocked_past_daily_limit(self):
+        # This cap only exists to guard real Anthropic API spend (see
+        # enforce_ask_limit), so it's only enforced when a key is
+        # actually configured - patched on here so this test exercises
+        # the "key configured, cap enforced" path regardless of what's
+        # set (or not) in this environment.
         headers, organization_id = self._register_and_login(
             f"admin5{self._n}@a.com", f"EntOrg5 {self._n}"
         )
@@ -223,11 +230,48 @@ class EntitlementsEnforcementTests(unittest.TestCase):
         finally:
             db.close()
 
-        r = self.client.post(
-            "/api/assistant/ask", headers=headers, json={"query": "What is this dataset?"}
-        )
+        with patch.dict(os.environ, {"ANTHROPIC_API_KEY": "test-key"}):
+            r = self.client.post(
+                "/api/assistant/ask", headers=headers, json={"query": "What is this dataset?"}
+            )
         self.assertEqual(r.status_code, 429, r.text)
         self.assertIn("starter plan", r.json()["detail"])
+
+    def test_ask_not_blocked_by_daily_limit_when_no_anthropic_key(self):
+        # Regression test: a real reported issue - a trial org (50/day
+        # cap) hit "you've used all your Ask'Fe' questions" while this
+        # deployment never had ANTHROPIC_API_KEY configured at all, so
+        # every question was actually being served by the free
+        # deterministic/semantic-search path with zero API spend to
+        # guard against. enforce_ask_limit now skips the cap entirely
+        # in that case - seeds well past starter's 20/day limit and
+        # confirms the request still goes through.
+        headers, organization_id = self._register_and_login(
+            f"admin5b{self._n}@a.com", f"EntOrg5b {self._n}"
+        )
+        self._set_active_starter(organization_id)
+
+        db = SessionLocal()
+        try:
+            me_id = self.client.get("/api/auth/me", headers=headers).json()["id"]
+            for _ in range(30):  # well past starter's 20/day limit
+                db.add(QueryLog(
+                    organization_id=organization_id,
+                    actor_user_id=me_id,
+                    source="ask",
+                    query_text="What is this dataset?",
+                    matched=True,
+                    created_at=datetime.utcnow(),
+                ))
+            db.commit()
+        finally:
+            db.close()
+
+        with patch.dict(os.environ, {"ANTHROPIC_API_KEY": ""}):
+            r = self.client.post(
+                "/api/assistant/ask", headers=headers, json={"query": "What is this dataset?"}
+            )
+        self.assertNotEqual(r.status_code, 429, r.text)
 
     def test_ask_not_blocked_by_stale_usage_outside_24h_window(self):
         headers, organization_id = self._register_and_login(
