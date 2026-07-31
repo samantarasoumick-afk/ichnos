@@ -33,8 +33,11 @@ import requests
 
 from sqlalchemy.orm import Session
 
+from app.models.business_process import BusinessProcessLink
 from app.models.dataset import Dataset
+from app.models.glossary_link import GlossaryTermLink
 from app.models.lineage import DatasetLineage
+from app.models.risk import RiskDatasetLink
 from app.models.source import DataSource
 
 from app.services.embedding_service import semantic_search
@@ -687,7 +690,7 @@ def _answer_via_semantic_search(db: Session, organization_id: str, query: str) -
     return {"answer": answer, "sources": sources}
 
 
-def answer_question(
+def _answer_question_core(
     db: Session,
     organization_id: str,
     query: str,
@@ -757,3 +760,150 @@ def answer_question(
         return result
 
     return _answer_via_semantic_search(db, organization_id, query)
+
+
+# Keyword sets already defined above (PII_KEYWORDS, LINEAGE_KEYWORDS,
+# GOVERNANCE_KEYWORDS, CONTRACT_KEYWORDS) double as the signal for
+# "which angle has this conversation already covered" - re-scanning
+# the raw query text works uniformly whether the question was actually
+# answered by a deterministic intent handler, the LLM path, or the
+# semantic-search fallback, rather than threading a category label
+# through every branch above individually. GOVERNANCE_KEYWORDS covers
+# both "governance"/maturity and "quality score" wording (it's in that
+# tuple already), so it suppresses both suggestion categories.
+_CATEGORY_KEYWORDS: tuple[tuple[str, tuple[str, ...]], ...] = (
+    ("pii", PII_KEYWORDS),
+    ("lineage", LINEAGE_KEYWORDS),
+    ("governance", GOVERNANCE_KEYWORDS),
+    ("quality", GOVERNANCE_KEYWORDS),
+    ("contract", CONTRACT_KEYWORDS),
+    ("ownership", OWNERSHIP_KEYWORDS),
+)
+
+
+def _already_asked_categories(query: str) -> set[str]:
+    normalized = query.lower().strip()
+    return {
+        category for category, keywords in _CATEGORY_KEYWORDS
+        if any(keyword in normalized for keyword in keywords)
+    }
+
+
+def _primary_dataset_from_sources(db: Session, sources: list[dict]) -> Dataset | None:
+    for source in sources:
+        if source.get("type") == "dataset":
+            return db.query(Dataset).filter(Dataset.id == source["id"]).first()
+    return None
+
+
+def _build_follow_up_suggestions(
+    db: Session,
+    dataset: Dataset,
+    already_asked: set[str],
+) -> list[dict]:
+    """
+    Suggests up to four natural next questions about the same dataset
+    this answer was about, each pointing at a different connected
+    attribute (glossary, business process, contract, data quality,
+    risk/controls, lineage, trust, the system it belongs to) than
+    whatever this question already covered - so a conversation walks
+    the connected graph one hop at a time instead of circling the same
+    angle. Existence-gated where that's cheap to check (glossary/
+    process/risk links) so a suggestion never points at something
+    that turns out to be empty; always-offered for angles every
+    dataset has an answer to regardless (contract status, quality
+    score, trust score, its source) even when the honest answer is
+    "none yet" - that's still a useful thing to learn.
+    """
+
+    label = f"{dataset.schema_name}.{dataset.name}"
+    candidates: list[tuple[str, dict]] = []
+
+    has_glossary = (
+        db.query(GlossaryTermLink)
+        .filter(GlossaryTermLink.dataset_id == dataset.id)
+        .first()
+        is not None
+    )
+    if has_glossary:
+        candidates.append((
+            "glossary",
+            {"label": "Glossary terms", "query": f"What glossary terms are linked to {label}?"},
+        ))
+
+    has_process = (
+        db.query(BusinessProcessLink)
+        .filter(BusinessProcessLink.dataset_id == dataset.id)
+        .first()
+        is not None
+    )
+    if has_process:
+        candidates.append((
+            "process",
+            {"label": "Business process", "query": f"Which business process uses {label}?"},
+        ))
+
+    has_risk = (
+        db.query(RiskDatasetLink)
+        .filter(RiskDatasetLink.dataset_id == dataset.id)
+        .first()
+        is not None
+    )
+    if has_risk:
+        candidates.append((
+            "risk",
+            {"label": "Risks & controls", "query": f"What risks and controls are logged against {label}?"},
+        ))
+
+    candidates.append((
+        "lineage",
+        {"label": "Lineage", "query": f"What's downstream of {dataset.name}?"},
+    ))
+    candidates.append((
+        "contract",
+        {"label": "Data contract", "query": f"Does {label} have a data contract?"},
+    ))
+    candidates.append((
+        "quality",
+        {"label": "Data quality", "query": f"What's the data quality score for {label}?"},
+    ))
+    candidates.append((
+        "systems",
+        {"label": "Source system", "query": f"Which system does {label} belong to?"},
+    ))
+    candidates.append((
+        "pii",
+        {"label": "PII", "query": f"Does {label} contain PII?"},
+    ))
+
+    return [
+        suggestion for category, suggestion in candidates
+        if category not in already_asked
+    ][:4]
+
+
+def answer_question(
+    db: Session,
+    organization_id: str,
+    query: str,
+    history: list[dict] | None = None,
+) -> dict:
+    """
+    Thin wrapper around _answer_question_core: same answer as before,
+    plus a `follow_up_suggestions` list built from whatever the
+    answer's primary dataset is actually connected to - the "keep
+    building on what's been asked" behavior, since DatFe already has
+    all of these relationships (glossary, process, contract, risk,
+    lineage) modeled and linked, not just the dataset in isolation.
+    """
+
+    result = _answer_question_core(db, organization_id, query, history=history)
+
+    dataset = _primary_dataset_from_sources(db, result.get("sources", []))
+    if dataset is not None:
+        already_asked = _already_asked_categories(query)
+        result["follow_up_suggestions"] = _build_follow_up_suggestions(db, dataset, already_asked)
+    else:
+        result["follow_up_suggestions"] = []
+
+    return result

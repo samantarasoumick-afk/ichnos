@@ -411,6 +411,118 @@ class AssistantTests(unittest.TestCase):
         self.assertEqual(messages[-1], {"role": "user", "content": "is any of that PII?"})
 
 
+class FollowUpSuggestionTests(unittest.TestCase):
+    """
+    Every answer whose sources include a dataset should come back with
+    follow_up_suggestions pointing at other things that dataset is
+    connected to (glossary, process, contract, quality, risk, lineage,
+    system, PII) - and should never re-suggest whatever angle the
+    current question already covered.
+    """
+
+    @classmethod
+    def setUpClass(cls):
+        cls.client = TestClient(app)
+
+    def setUp(self):
+        self._n = uuid.uuid4().hex[:8]
+
+    def _register_and_login(self, email, org_name):
+        r = self.client.post("/api/auth/register", json={
+            "email": email, "password": "password123", "organization_name": org_name,
+        })
+        self.assertEqual(r.status_code, 200, r.text)
+        r = self.client.post("/api/auth/login", json={"email": email, "password": "password123"})
+        return {"Authorization": f"Bearer {r.json()['access_token']}"}
+
+    def _create_source(self, headers, name):
+        r = self.client.post("/api/sources", headers=headers, json={
+            "name": name, "type": "postgresql",
+            "connection_config": {"host": "x", "database": "y", "user": "z", "password": "p"},
+        })
+        self.assertEqual(r.status_code, 200, r.text)
+        return r.json()["id"]
+
+    @patch("app.api.scanner.get_scanner")
+    def _scan(self, headers, source_id, scan_result, mock_get_scanner):
+        mock_get_scanner.return_value = MagicMock(return_value=scan_result)
+        r = self.client.post(f"/api/scanner/{source_id}", headers=headers)
+        self.assertEqual(r.status_code, 200, r.text)
+
+    def _ask(self, headers, query):
+        r = self.client.post("/api/assistant/ask", headers=headers, json={"query": query})
+        self.assertEqual(r.status_code, 200, r.text)
+        return r.json()
+
+    def test_ownership_answer_suggests_other_angles(self):
+        headers = self._register_and_login(f"fu1{self._n}@a.com", f"FollowUp Org 1 {self._n}")
+        source_id = self._create_source(headers, f"FU1{self._n}")
+        self._scan(headers, source_id, SCAN_RESULT)
+
+        body = self._ask(headers, "who owns customers?")
+
+        suggestions = body["follow_up_suggestions"]
+        self.assertTrue(len(suggestions) > 0)
+        queries = " ".join(s["query"] for s in suggestions)
+        self.assertIn("customers", queries)
+        categories_offered = {s["label"] for s in suggestions}
+        # Ownership isn't one of the suggestion categories itself, so
+        # nothing should be suppressed - contract/quality/systems/pii
+        # are always-on candidates.
+        self.assertTrue(categories_offered & {"Data contract", "Data quality", "Source system", "PII"})
+
+    def test_lineage_answer_does_not_resuggest_lineage(self):
+        headers = self._register_and_login(f"fu2{self._n}@a.com", f"FollowUp Org 2 {self._n}")
+        source_id = self._create_source(headers, f"FU2{self._n}")
+        self._scan(headers, source_id, SCAN_RESULT)
+        self._scan(headers, source_id, ORDERS_SCAN_RESULT)
+
+        body = self._ask(headers, "what's downstream of customers?")
+
+        suggestions = body["follow_up_suggestions"]
+        self.assertTrue(len(suggestions) > 0)
+        labels = {s["label"] for s in suggestions}
+        self.assertNotIn("Lineage", labels)
+
+    def test_pii_answer_does_not_resuggest_pii(self):
+        headers = self._register_and_login(f"fu3{self._n}@a.com", f"FollowUp Org 3 {self._n}")
+        source_id = self._create_source(headers, f"FU3{self._n}")
+        self._scan(headers, source_id, SCAN_RESULT)
+
+        # The PII intent's answer still carries the at-risk dataset(s)
+        # as sources, so follow-ups are generated against the first one -
+        # just without re-suggesting the PII angle itself.
+        body = self._ask(headers, "which datasets have PII?")
+        suggestions = body["follow_up_suggestions"]
+        self.assertTrue(len(suggestions) > 0)
+        labels = {s["label"] for s in suggestions}
+        self.assertNotIn("PII", labels)
+
+    def test_glossary_and_process_suggestions_only_appear_when_linked(self):
+        headers = self._register_and_login(f"fu4{self._n}@a.com", f"FollowUp Org 4 {self._n}")
+        source_id = self._create_source(headers, f"FU4{self._n}")
+        self._scan(headers, source_id, SCAN_RESULT)
+
+        dataset_id = self.client.get("/api/datasets", headers=headers).json()[0]["id"]
+
+        body = self._ask(headers, "who owns customers?")
+        labels_before = {s["label"] for s in body["follow_up_suggestions"]}
+        self.assertNotIn("Glossary terms", labels_before)
+        self.assertNotIn("Business process", labels_before)
+
+        term_id = self.client.post("/api/governance/glossary", headers=headers, json={
+            "term": f"CustomerTerm{self._n}", "definition": "A customer record",
+        }).json()["id"]
+        r = self.client.post("/api/glossary-links", headers=headers, json={
+            "term_id": term_id, "dataset_id": dataset_id,
+        })
+        self.assertEqual(r.status_code, 200, r.text)
+
+        body = self._ask(headers, "who owns customers?")
+        labels_after = {s["label"] for s in body["follow_up_suggestions"]}
+        self.assertIn("Glossary terms", labels_after)
+
+
 class SemanticSearchServiceTests(unittest.TestCase):
     """Direct unit tests of the retrieval layer, independent of the API."""
 
