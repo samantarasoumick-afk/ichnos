@@ -11,12 +11,19 @@ the app's global, cross-entity search bar.
 
 Covers every entity type a user might plausibly be looking for by
 name/description rather than just datasets + glossary terms:
-BusinessProcess, Risk, Control, GovernanceThread (discussions), and
-individual DatasetColumns are all included in the corpus too.
-DataSource (connections) and User (team members) are deliberately
-left out - searching for "the Postgres connection" or "the person
-named Priya" isn't really what this bar is for, and the assistant
-never needed them either.
+BusinessProcess, Risk, Control, GovernanceThread (discussions),
+individual DatasetColumns, and DataSource (connections/systems) are
+all included in the corpus too. User (team members) is the one thing
+deliberately left out - "the person named Priya" isn't what this bar
+is for.
+
+Source, dataset, and column are treated as the three primary tiers a
+catalog search should surface (app/api/search.py reserves a slice of
+its result budget for each of them specifically) - so searching for a
+system name like "Salesforce" returns the source itself, which can
+then be drilled into its datasets, which can be drilled into their
+columns, rather than a system-level question only ever surfacing
+whichever individual table happens to rank highest.
 
 Column documents deliberately never index DatasetColumn.sample_values
 - that field can hold real (unmasked) example values for PII/sensitive
@@ -45,9 +52,13 @@ from app.models.dataset import Dataset
 from app.models.governance import BusinessGlossaryTerm
 from app.models.governance_thread import GovernanceThread
 from app.models.risk import Risk
+from app.models.source import DataSource
+
+from app.services.ecosystem_service import compute_source_rollup
 
 
 DocType = Literal[
+    "source",
     "dataset",
     "column",
     "glossary_term",
@@ -73,6 +84,30 @@ class SearchResult:
 
     document: CorpusDocument
     score: float
+
+
+def _source_document(source: DataSource, source_datasets: list[Dataset]) -> CorpusDocument:
+    """
+    Unlike every other doc_type, `ref` here is not the bare ORM object -
+    describe_document() needs the dataset-count/column-count/PII/worst-
+    governance rollup too, and DataSource has no ORM-level relationship
+    to its datasets to recompute that lazily later without another
+    query. Bundled once, here, where the full per-source dataset list
+    is already on hand from build_corpus().
+    """
+
+    rollup = compute_source_rollup(source_datasets)
+
+    dataset_labels = " ".join(f"{d.schema_name}.{d.name} {d.name}" for d in source_datasets)
+    text_parts = [source.name, source.type, dataset_labels]
+
+    return CorpusDocument(
+        doc_type="source",
+        id=source.id,
+        label=source.name,
+        text=" ".join(part for part in text_parts if part),
+        ref={"source": source, **rollup},
+    )
 
 
 def _dataset_document(dataset: Dataset) -> CorpusDocument:
@@ -207,6 +242,29 @@ def build_corpus(
 
     documents: list[CorpusDocument] = []
 
+    if wants("source"):
+        sources = (
+            db.query(DataSource)
+            .filter(DataSource.organization_id == organization_id)
+            .all()
+        )
+        # Needed for the rollup even if "dataset" itself wasn't
+        # requested in this call - the two are queried independently
+        # rather than sharing the block below, since doc_types can ask
+        # for one without the other.
+        source_datasets_all = (
+            db.query(Dataset)
+            .filter(Dataset.organization_id == organization_id)
+            .all()
+        )
+        datasets_by_source: dict[str, list[Dataset]] = {}
+        for d in source_datasets_all:
+            datasets_by_source.setdefault(d.source_id, []).append(d)
+        documents += [
+            _source_document(s, datasets_by_source.get(s.id, []))
+            for s in sources
+        ]
+
     if wants("dataset"):
         datasets = (
             db.query(Dataset)
@@ -322,6 +380,19 @@ def describe_document(document: CorpusDocument) -> tuple[str, str]:
 
     ref = document.ref
 
+    if document.doc_type == "source":
+        # ref is the {"source": ..., **rollup} dict built in
+        # _source_document() above, not a bare ORM object - see that
+        # function's docstring for why.
+        source = ref["source"]
+        bits = [f"{ref['dataset_count']} dataset{'s' if ref['dataset_count'] != 1 else ''}"]
+        if ref["total_columns"]:
+            bits.append(f"{ref['total_columns']} columns")
+        if ref["pii_columns"]:
+            bits.append(f"{ref['pii_columns']} PII")
+        subtitle = f"Source · {source.type} · " + ", ".join(bits)
+        return subtitle, f"/ecosystem?sourceId={document.id}"
+
     if document.doc_type == "dataset":
         return ref.schema_name, f"/datasets/{document.id}"
 
@@ -331,7 +402,7 @@ def describe_document(document: CorpusDocument) -> tuple[str, str]:
         subtitle = f"Column · {label}"
         if ref.classification and ref.classification.upper() not in ("NONE", ""):
             subtitle += f" · {ref.classification}"
-        url = f"/datasets/{dataset.id}?tab=columns" if dataset else "/"
+        url = f"/datasets/{dataset.id}?tab=columns&highlightColumn={document.id}" if dataset else "/"
         return subtitle, url
 
     if document.doc_type == "glossary_term":

@@ -33,6 +33,16 @@ router = APIRouter(
 
 SNIPPET_MAX_LENGTH = 160
 
+# The three tiers a catalog search should treat as first-class: a
+# customer searching for a system name should get a source-level hit,
+# not just whichever individual dataset/column happens to rank
+# highest overall. A single flat top-K ranking across every entity
+# type tends to get crowded out by whichever type is most numerous
+# (columns, in most catalogs) - reserving a slice of the budget for
+# each of these three guarantees representation from every level of
+# the source -> dataset -> column hierarchy.
+CORE_TYPES: tuple[str, ...] = ("source", "dataset", "column")
+
 
 def _snippet(text: str, label: str) -> str:
 
@@ -65,7 +75,41 @@ def search(
     if not q.strip():
         return SearchResponse(results=[])
 
-    ranked = semantic_search(db, current_user.organization_id, q, top_k=limit)
+    seen: set[tuple[str, str]] = set()
+    ranked = []
+
+    # Pass 1: reserve a fair minimum share of the overall limit for
+    # each core tier, ranked independently within its own type so one
+    # tier's matches can't crowd another's out.
+    per_type_reserve = max(1, limit // len(CORE_TYPES))
+    for doc_type in CORE_TYPES:
+        for result in semantic_search(
+            db, current_user.organization_id, q,
+            top_k=per_type_reserve, doc_types=(doc_type,),
+        ):
+            key = (result.document.doc_type, result.document.id)
+            if key in seen:
+                continue
+            seen.add(key)
+            ranked.append(result)
+
+    # Pass 2: fill whatever's left of the overall limit from a single
+    # combined ranking across every type (core types already captured
+    # above are skipped via `seen`) - this is what surfaces
+    # glossary/process/risk/control/discussion hits, and lets a core
+    # type get extra representation beyond its reserved minimum when
+    # it genuinely dominates the results and there's room left.
+    if len(ranked) < limit:
+        for result in semantic_search(db, current_user.organization_id, q, top_k=limit * 2):
+            if len(ranked) >= limit:
+                break
+            key = (result.document.doc_type, result.document.id)
+            if key in seen:
+                continue
+            seen.add(key)
+            ranked.append(result)
+
+    ranked = ranked[:limit]
 
     results = []
 

@@ -87,7 +87,7 @@ class ColumnSearchTests(unittest.TestCase):
         self.assertEqual(hit["label"], column_name)
         self.assertIn("public.customers", hit["subtitle"])
         self.assertIn("SENSITIVE", hit["subtitle"])
-        self.assertEqual(hit["url"], f"/datasets/{dataset.id}?tab=columns")
+        self.assertEqual(hit["url"], f"/datasets/{dataset.id}?tab=columns&highlightColumn={column.id}")
 
     def test_column_search_does_not_leak_sample_values(self):
         headers, _ = self._register_and_login(f"colsearchleak{self._n}@a.com", f"Col Search Leak Org {self._n}")

@@ -82,6 +82,34 @@ def dataset_tier(dataset_id: str, has_upstream: set, has_downstream: set) -> str
     return TIER_STANDALONE
 
 
+def compute_source_rollup(source_datasets: list[Dataset]) -> dict:
+    """
+    Aggregate counts for everything under one source: how many
+    datasets it has, how many columns total, how many of those carry
+    PII, and the single worst governance status among its datasets.
+    Extracted so this isn't computed one way here (for the Ecosystem
+    View's source nodes) and a slightly different way anywhere else
+    that needs "how big/risky is this system" - currently also used by
+    catalog_search_service.py's source search-result documents, so a
+    source shows the same numbers whether you found it by browsing the
+    map or by searching for it.
+    """
+
+    governance_statuses = [d.governance_status for d in source_datasets]
+    worst_governance = None
+    for level in _GOVERNANCE_SEVERITY:
+        if level in governance_statuses:
+            worst_governance = level
+            break
+
+    return {
+        "dataset_count": len(source_datasets),
+        "total_columns": sum(d.total_columns for d in source_datasets),
+        "pii_columns": sum(d.pii_columns for d in source_datasets),
+        "worst_governance_status": worst_governance,
+    }
+
+
 def _source_tier(dataset_tiers: list[str]) -> str:
     """
     A source's tier is the tier its datasets actually sit at. Most
@@ -139,22 +167,12 @@ def build_ecosystem_graph(db: Session, organization_id: str) -> dict:
         source_datasets = datasets_by_source.get(source.id, [])
         tiers = [tier_by_dataset_id[d.id] for d in source_datasets]
 
-        governance_statuses = [d.governance_status for d in source_datasets]
-        worst_governance = None
-        for level in _GOVERNANCE_SEVERITY:
-            if level in governance_statuses:
-                worst_governance = level
-                break
-
         source_nodes.append({
             "id": source.id,
             "name": source.name,
             "type": source.type,
             "tier": _source_tier(tiers),
-            "dataset_count": len(source_datasets),
-            "total_columns": sum(d.total_columns for d in source_datasets),
-            "pii_columns": sum(d.pii_columns for d in source_datasets),
-            "worst_governance_status": worst_governance,
+            **compute_source_rollup(source_datasets),
             "dataset_ids": [d.id for d in source_datasets],
         })
 
