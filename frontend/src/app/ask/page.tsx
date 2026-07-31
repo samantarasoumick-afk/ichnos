@@ -8,13 +8,14 @@ import TopNav from "../../components/TopNav";
 import { useMentionPicker } from "../../hooks/useMentionPicker";
 import { useRequireAuth } from "../../hooks/useRequireAuth";
 import api from "../../services/api";
-import type { AskResponse, AskSource, MentionItem } from "../../types/metadata";
+import type { AskFollowUpSuggestion, AskResponse, AskSource, MentionItem } from "../../types/metadata";
 
 type ConversationEntry = {
   id: string;
   role: "user" | "assistant";
   text: string;
   sources?: AskSource[];
+  followUpSuggestions?: AskFollowUpSuggestion[];
 };
 
 const EXAMPLE_QUESTIONS = [
@@ -148,6 +149,7 @@ export default function AskPage() {
         role: "assistant",
         text: response.data.answer,
         sources: response.data.sources,
+        followUpSuggestions: response.data.follow_up_suggestions,
       };
 
       setConversation((prev) => [...prev, assistantEntry]);
@@ -242,6 +244,27 @@ export default function AskPage() {
                         {source.label}
                       </Link>
                     ))}
+                  </div>
+                )}
+
+                {entry.followUpSuggestions && entry.followUpSuggestions.length > 0 && (
+                  <div className="mt-3 border-t border-gray-300 pt-2">
+                    <div className="mb-1.5 text-[11px] font-semibold uppercase tracking-wide text-gray-400">
+                      Keep going
+                    </div>
+                    <div className="flex flex-wrap gap-1.5">
+                      {entry.followUpSuggestions.map((suggestion, index) => (
+                        <button
+                          key={`${suggestion.label}-${index}`}
+                          type="button"
+                          onClick={() => submitQuestion(suggestion.query)}
+                          disabled={asking}
+                          className="rounded-full border border-gray-300 bg-white px-3 py-1 text-xs text-gray-700 hover:bg-gray-50 disabled:opacity-50"
+                        >
+                          {suggestion.label}
+                        </button>
+                      ))}
+                    </div>
                   </div>
                 )}
               </div>
