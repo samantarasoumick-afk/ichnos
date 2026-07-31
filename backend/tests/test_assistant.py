@@ -216,6 +216,86 @@ class AssistantTests(unittest.TestCase):
         self.assertIn("quality score", second["answer"])
         self.assertNotIn("Governance maturity:", second["answer"])
 
+    def test_followup_glossary_question_scoped_to_conversation_dataset(self):
+        # Regression test: a real reported bug - "what glossary terms
+        # are associated" as a follow-up to "who owns customers?" came
+        # back with a mix of relevant and irrelevant terms, because
+        # there was no dedicated glossary handler at all - it fell
+        # through to the unscoped semantic-search fallback, which
+        # ranks the whole catalog against the raw query text instead of
+        # "everything actually linked to this one dataset".
+        headers = self._register_and_login(f"amem4{self._n}@a.com", f"Assistant Org Mem4 {self._n}")
+        source_id = self._create_source(headers, f"SM4{self._n}")
+        self._scan(headers, source_id, SCAN_RESULT)
+        self._scan(headers, source_id, ORDERS_SCAN_RESULT)
+
+        datasets = self.client.get("/api/datasets", headers=headers).json()
+        customers_id = next(d["id"] for d in datasets if d["name"] == "customers")
+        orders_id = next(d["id"] for d in datasets if d["name"] == "orders")
+
+        linked_term_id = self.client.post("/api/governance/glossary", headers=headers, json={
+            "term": "Customer Identifier",
+            "definition": "The unique identifier for a customer record.",
+        }).json()["id"]
+        self.client.post("/api/glossary-links", headers=headers, json={
+            "term_id": linked_term_id,
+            "dataset_id": customers_id,
+        })
+
+        unrelated_term_id = self.client.post("/api/governance/glossary", headers=headers, json={
+            "term": "Order Total",
+            "definition": "The total monetary value of an order.",
+        }).json()["id"]
+        self.client.post("/api/glossary-links", headers=headers, json={
+            "term_id": unrelated_term_id,
+            "dataset_id": orders_id,
+        })
+
+        first = self._ask(headers, "who owns customers?")
+
+        history = [
+            {"role": "user", "text": "who owns customers?"},
+            {"role": "assistant", "text": first["answer"]},
+        ]
+        second = self._ask_with_history(headers, "what glossary terms are associated?", history)
+        self.assertIn("Customer Identifier", second["answer"])
+        self.assertNotIn("Order Total", second["answer"])
+        self.assertTrue(any(s["type"] == "glossary_term" for s in second["sources"]))
+
+    def test_followup_process_question_scoped_to_conversation_dataset(self):
+        headers = self._register_and_login(f"amem5{self._n}@a.com", f"Assistant Org Mem5 {self._n}")
+        source_id = self._create_source(headers, f"SM5{self._n}")
+        self._scan(headers, source_id, SCAN_RESULT)
+        self._scan(headers, source_id, ORDERS_SCAN_RESULT)
+
+        datasets = self.client.get("/api/datasets", headers=headers).json()
+        customers_id = next(d["id"] for d in datasets if d["name"] == "customers")
+        orders_id = next(d["id"] for d in datasets if d["name"] == "orders")
+
+        process_id = self.client.post("/api/business-processes", headers=headers, json={
+            "name": "Customer Onboarding",
+        }).json()["id"]
+        self.client.post(f"/api/business-processes/{process_id}/datasets", headers=headers, json={
+            "dataset_id": customers_id,
+        })
+
+        other_process_id = self.client.post("/api/business-processes", headers=headers, json={
+            "name": "Order Fulfillment",
+        }).json()["id"]
+        self.client.post(f"/api/business-processes/{other_process_id}/datasets", headers=headers, json={
+            "dataset_id": orders_id,
+        })
+
+        first = self._ask(headers, "who owns customers?")
+
+        history = [
+            {"role": "user", "text": "who owns customers?"},
+            {"role": "assistant", "text": first["answer"]},
+        ]
+        second = self._ask_with_history(headers, "which business process uses this?", history)
+        self.assertIn("Customer Onboarding", second["answer"])
+        self.assertNotIn("Order Fulfillment", second["answer"])
+
     def test_lineage_intent_reports_downstream(self):
         headers = self._register_and_login(f"a6{self._n}@a.com", f"Assistant Org 6 {self._n}")
         source_id = self._create_source(headers, f"S6{self._n}")

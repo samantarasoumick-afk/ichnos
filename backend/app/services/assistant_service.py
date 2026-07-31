@@ -33,9 +33,12 @@ import requests
 
 from sqlalchemy.orm import Session
 
+from app.models.business_process import BusinessProcess
 from app.models.business_process import BusinessProcessLink
+from app.models.column import DatasetColumn
 from app.models.dataset import Dataset
 from app.models.glossary_link import GlossaryTermLink
+from app.models.governance import BusinessGlossaryTerm
 from app.models.lineage import DatasetLineage
 from app.models.risk import RiskDatasetLink
 from app.models.source import DataSource
@@ -103,6 +106,22 @@ CONTRACT_KEYWORDS = ("contract", "breach", "breached")
 # usual per-dataset list - another reported bug where that phrasing
 # came back with raw dataset rows instead of source names.
 SOURCE_SCOPE_KEYWORDS = ("source", "sources", "system", "systems")
+
+# Previously there was no dedicated handler for either of these at all
+# - "what glossary terms are associated with X" and "which business
+# process uses X" both fell straight through to the generic semantic-
+# search fallback below, which searches the *entire* catalog for
+# whatever's closest to the raw query text rather than "everything
+# actually linked to this one dataset" - a reported bug where a
+# glossary follow-up came back with a mix of on-topic and unrelated
+# results, since nothing scoped the search to the dataset just asked
+# about.
+GLOSSARY_KEYWORDS = ("glossary", "business term", "defined term")
+
+PROCESS_KEYWORDS = (
+    "business process", "business processes",
+    "which process", "what process", "which processes", "what processes"
+)
 
 
 def _dataset_directory_line(dataset: Dataset) -> str:
@@ -858,6 +877,142 @@ def _answer_quality_question(
     }
 
 
+def _answer_glossary_question(
+    db: Session,
+    datasets: list[Dataset],
+    normalized_query: str,
+    history: list[dict] | None = None,
+) -> dict | None:
+    """
+    Answers "what glossary terms are associated/linked to X" from the
+    real, explicit GlossaryTermLink rows for the resolved dataset -
+    previously there was no dedicated handler for this at all, so it
+    fell straight through to the generic semantic-search fallback,
+    which ranks the *entire* corpus (every dataset and glossary term in
+    the org) against the raw query text instead of "everything actually
+    linked to this one dataset". That's what produced the reported
+    symptom: a follow-up like "what glossary terms are associated"
+    coming back with a mix of on-topic and unrelated hits, since nothing
+    scoped the search to the dataset the conversation was just about.
+    """
+
+    if not any(keyword in normalized_query for keyword in GLOSSARY_KEYWORDS):
+        return None
+
+    dataset = _find_mentioned_dataset_with_history(datasets, normalized_query, history)
+
+    if dataset is None:
+        return {
+            "answer": (
+                "I can look up glossary terms once you name a specific dataset - "
+                "try something like \"what glossary terms are linked to customers?\"."
+            ),
+            "sources": [],
+        }
+
+    label = f"{dataset.schema_name}.{dataset.name}"
+
+    rows = (
+        db.query(GlossaryTermLink, BusinessGlossaryTerm, DatasetColumn)
+        .join(BusinessGlossaryTerm, GlossaryTermLink.term_id == BusinessGlossaryTerm.id)
+        .outerjoin(DatasetColumn, GlossaryTermLink.column_id == DatasetColumn.id)
+        .filter(GlossaryTermLink.dataset_id == dataset.id)
+        .all()
+    )
+
+    if not rows:
+        return {
+            "answer": f"No glossary terms are linked to {label} yet.",
+            "sources": [{"type": "dataset", "id": dataset.id, "label": label}],
+        }
+
+    lines = [
+        f"- {term.term}" + (f" (on column {column.name})" if column else " (whole dataset)")
+        for _link, term, column in rows
+    ]
+
+    answer = f"{len(rows)} glossary term(s) linked to {label}:\n" + "\n".join(lines)
+
+    return {
+        "answer": answer,
+        # The dataset itself comes first (not just the terms) so a
+        # follow-up ("what's downstream of it?") still has a dataset to
+        # resolve against via _primary_dataset_from_sources/history -
+        # otherwise the conversation's subject would be lost the moment
+        # a glossary question was asked about it.
+        "sources": [
+            {"type": "dataset", "id": dataset.id, "label": label},
+            *[
+                {"type": "glossary_term", "id": term.id, "label": term.term}
+                for _link, term, _column in rows
+            ],
+        ],
+    }
+
+
+def _answer_process_question(
+    db: Session,
+    datasets: list[Dataset],
+    normalized_query: str,
+    history: list[dict] | None = None,
+) -> dict | None:
+    """
+    Same idea as _answer_glossary_question, for "which business process
+    uses X" - the explicit BusinessProcessLink rows for the resolved
+    dataset, instead of an unscoped semantic-search fallback.
+    """
+
+    if not any(keyword in normalized_query for keyword in PROCESS_KEYWORDS):
+        return None
+
+    dataset = _find_mentioned_dataset_with_history(datasets, normalized_query, history)
+
+    if dataset is None:
+        return {
+            "answer": (
+                "I can look up business processes once you name a specific dataset - "
+                "try something like \"which business process uses customers?\"."
+            ),
+            "sources": [],
+        }
+
+    label = f"{dataset.schema_name}.{dataset.name}"
+
+    rows = (
+        db.query(BusinessProcess)
+        .join(BusinessProcessLink, BusinessProcessLink.process_id == BusinessProcess.id)
+        .filter(BusinessProcessLink.dataset_id == dataset.id)
+        .all()
+    )
+
+    if not rows:
+        return {
+            "answer": f"No business process is linked to {label} yet.",
+            "sources": [{"type": "dataset", "id": dataset.id, "label": label}],
+        }
+
+    lines = [
+        f"- {process.name}" + (f" (owner: {process.owner})" if process.owner else "")
+        for process in rows
+    ]
+
+    answer = f"{label} is used by {len(rows)} business process(es):\n" + "\n".join(lines)
+
+    return {
+        "answer": answer,
+        # Dataset first, same reasoning as _answer_glossary_question -
+        # keeps it resolvable as the conversation's subject for a
+        # further follow-up.
+        "sources": [
+            {"type": "dataset", "id": dataset.id, "label": label},
+            *[
+                {"type": "process", "id": process.id, "label": process.name}
+                for process in rows
+            ],
+        ],
+    }
+
+
 def _answer_governance_question(
     db: Session,
     organization_id: str,
@@ -1017,6 +1172,20 @@ def _answer_question_core(
     if result is not None:
         return result
 
+    # Checked before the semantic-search fallback: previously neither of
+    # these had a dedicated handler at all, so "what glossary terms are
+    # associated with X" / "which business process uses X" fell through
+    # to the unscoped semantic search below - see GLOSSARY_KEYWORDS/
+    # PROCESS_KEYWORDS above for why that produced a mix of relevant and
+    # irrelevant results.
+    result = _answer_glossary_question(db, datasets, normalized_query, history=history)
+    if result is not None:
+        return result
+
+    result = _answer_process_question(db, datasets, normalized_query, history=history)
+    if result is not None:
+        return result
+
     result = _answer_governance_question(db, organization_id, normalized_query)
     if result is not None:
         return result
@@ -1037,6 +1206,8 @@ def _answer_question_core(
 # own QUALITY_KEYWORDS (previously aliased to GOVERNANCE_KEYWORDS,
 # which is what caused quality questions to be answered as governance
 # maturity in the first place - see _answer_quality_question above).
+# "glossary"/"process" are new alongside _answer_glossary_question/
+# _answer_process_question above.
 _CATEGORY_KEYWORDS: tuple[tuple[str, tuple[str, ...]], ...] = (
     ("pii", PII_KEYWORDS),
     ("lineage", LINEAGE_KEYWORDS),
@@ -1044,6 +1215,8 @@ _CATEGORY_KEYWORDS: tuple[tuple[str, tuple[str, ...]], ...] = (
     ("quality", QUALITY_KEYWORDS),
     ("contract", CONTRACT_KEYWORDS),
     ("ownership", OWNERSHIP_KEYWORDS),
+    ("glossary", GLOSSARY_KEYWORDS),
+    ("process", PROCESS_KEYWORDS),
 )
 
 
