@@ -18,6 +18,35 @@ import type {
 
 type Audience = "analyst" | "owner";
 
+// One entry per clickable stat chip in the summary bar. Each maps to a
+// drill-down list built from data already sitting in `graph` - no new
+// API calls needed, just a client-side filter/projection.
+type StatFilterKind =
+  | "sources"
+  | "datasets"
+  | "hops"
+  | "pii"
+  | "processes"
+  | "glossaryTerms"
+  | "breachedContracts";
+
+const STAT_FILTER_TITLES: Record<StatFilterKind, string> = {
+  sources: "Connected systems",
+  datasets: "Datasets",
+  hops: "Lineage hops",
+  pii: "Datasets with PII columns",
+  processes: "Business processes",
+  glossaryTerms: "Glossary terms",
+  breachedContracts: "Breached contracts",
+};
+
+type StatListItem = {
+  key: string;
+  label: string;
+  sublabel: string;
+  onClick: () => void;
+};
+
 const AUDIENCE_COPY: Record<Audience, { label: string; blurb: string }> = {
   analyst: {
     label: "Analyst view",
@@ -40,6 +69,8 @@ export default function EcosystemPage() {
   const [audience, setAudience] = useState<Audience>("analyst");
   const [selection, setSelection] = useState<EcosystemSelection | null>(null);
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
+  const [statFilter, setStatFilter] = useState<StatFilterKind | null>(null);
+  const [mapExpanded, setMapExpanded] = useState(false);
 
   const [searchQuery, setSearchQuery] = useState("");
   const [searchResults, setSearchResults] = useState<SearchResultItem[]>([]);
@@ -143,6 +174,104 @@ export default function EcosystemPage() {
     };
   }, [graph]);
 
+  // The list backing whichever stat chip is currently drilled into. Built
+  // straight from the already-loaded graph - clicking "8 sources" doesn't
+  // fetch anything, it just projects graph.sources into a clickable list
+  // that reuses the exact same select* functions the map itself uses, so
+  // picking an item here lands on the identical detail panel a map click
+  // would produce.
+  const statListItems: StatListItem[] = useMemo(() => {
+    if (!graph || !statFilter) return [];
+
+    const datasetById = new Map(graph.datasets.map((d) => [d.id, d]));
+    const datasetLabel = (d: EcosystemDatasetNode) => `${d.schema_name}.${d.name}`;
+
+    switch (statFilter) {
+      case "sources":
+        return graph.sources.map((source) => ({
+          key: source.id,
+          label: source.name,
+          sublabel: `${source.type} · ${source.dataset_count} dataset${source.dataset_count === 1 ? "" : "s"} · ${source.pii_columns} PII col${source.pii_columns === 1 ? "" : "s"}`,
+          onClick: () => selectSource(source),
+        }));
+
+      case "datasets":
+        return graph.datasets.map((dataset) => ({
+          key: dataset.id,
+          label: datasetLabel(dataset),
+          sublabel: `${dataset.total_columns ?? 0} cols · ${dataset.pii_columns ?? 0} PII · DQ ${dataset.quality_score ?? 0}`,
+          onClick: () => selectDataset(dataset),
+        }));
+
+      case "hops":
+        return graph.edges.map((edge, index) => {
+          const upstream = datasetById.get(edge.upstream_dataset_id);
+          const downstream = datasetById.get(edge.downstream_dataset_id);
+          return {
+            key: `${edge.id}-${index}`,
+            label: `${upstream ? datasetLabel(upstream) : "Unknown"} → ${downstream ? datasetLabel(downstream) : "Unknown"}`,
+            sublabel: edge.transformation_type || "lineage",
+            onClick: () => {
+              if (upstream) setExpanded((prev) => new Set(prev).add(upstream.source_id));
+              if (downstream) selectDataset(downstream);
+              else if (upstream) selectDataset(upstream);
+            },
+          };
+        });
+
+      case "pii":
+        return graph.datasets
+          .filter((dataset) => (dataset.pii_columns ?? 0) > 0)
+          .sort((a, b) => (b.pii_columns ?? 0) - (a.pii_columns ?? 0))
+          .map((dataset) => ({
+            key: dataset.id,
+            label: datasetLabel(dataset),
+            sublabel: `${dataset.pii_columns} PII column${dataset.pii_columns === 1 ? "" : "s"}`,
+            onClick: () => selectDataset(dataset),
+          }));
+
+      case "processes":
+        return graph.processes.map((process) => ({
+          key: process.id,
+          label: process.name,
+          sublabel: `${process.dataset_ids.length} dataset${process.dataset_ids.length === 1 ? "" : "s"} touched${process.owner ? ` · ${process.owner}` : ""}`,
+          onClick: () => applySelection({ kind: "process", process }),
+        }));
+
+      case "glossaryTerms":
+        return graph.glossary_terms.map((term) => ({
+          key: term.id,
+          label: term.term,
+          sublabel: `${term.dataset_ids.length} dataset${term.dataset_ids.length === 1 ? "" : "s"} tagged${term.domain ? ` · ${term.domain}` : ""}`,
+          onClick: () => applySelection({ kind: "glossary_term", term }),
+        }));
+
+      case "breachedContracts":
+        return graph.contracts
+          .filter((contract) => contract.last_status === "BREACHED")
+          .map((contract) => {
+            const dataset = datasetById.get(contract.dataset_id);
+            return {
+              key: contract.id,
+              label: dataset ? datasetLabel(dataset) : contract.dataset_id,
+              sublabel: contract.last_breach_details || "Contract breached",
+              onClick: () => dataset && selectDataset(dataset),
+            };
+          });
+
+      default:
+        return [];
+    }
+    // selectDataset/selectSource are stable per-render closures over setState
+    // setters only - including them would just make this recompute on every
+    // render for no behavioral difference.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [graph, statFilter]);
+
+  function toggleStatFilter(kind: StatFilterKind) {
+    setStatFilter((prev) => (prev === kind ? null : kind));
+  }
+
   async function runSemanticSearch() {
     const trimmed = searchQuery.trim();
     if (!trimmed) {
@@ -219,14 +348,32 @@ export default function EcosystemPage() {
       {!loading && !errorMessage && graph && (
         <>
           <div className="mb-4 flex flex-wrap items-center justify-between gap-4 rounded-xl bg-white p-4 shadow">
-            <div className="flex flex-wrap gap-6 text-sm text-gray-600">
-              <span><strong className="text-gray-900">{stats?.sources}</strong> connected systems</span>
-              <span><strong className="text-gray-900">{stats?.datasets}</strong> datasets</span>
-              <span><strong className="text-gray-900">{stats?.hops}</strong> lineage hops</span>
-              <span><strong className="text-gray-900">{stats?.pii}</strong> PII columns tracked</span>
-              <span><strong className="text-gray-900">{stats?.processes}</strong> business processes</span>
-              <span><strong className="text-gray-900">{stats?.glossaryTerms}</strong> glossary terms</span>
-              <span><strong className="text-gray-900">{stats?.breachedContracts}</strong> breached contracts</span>
+            <div className="flex flex-wrap gap-2 text-sm text-gray-600">
+              {(
+                [
+                  { kind: "sources" as const, value: stats?.sources, suffix: "connected systems" },
+                  { kind: "datasets" as const, value: stats?.datasets, suffix: "datasets" },
+                  { kind: "hops" as const, value: stats?.hops, suffix: "lineage hops" },
+                  { kind: "pii" as const, value: stats?.pii, suffix: "PII columns tracked" },
+                  { kind: "processes" as const, value: stats?.processes, suffix: "business processes" },
+                  { kind: "glossaryTerms" as const, value: stats?.glossaryTerms, suffix: "glossary terms" },
+                  { kind: "breachedContracts" as const, value: stats?.breachedContracts, suffix: "breached contracts" },
+                ]
+              ).map(({ kind, value, suffix }) => (
+                <button
+                  key={kind}
+                  type="button"
+                  onClick={() => toggleStatFilter(kind)}
+                  title={`Click to see the ${suffix} and drill down`}
+                  className={`rounded-lg border px-2.5 py-1 transition-colors ${
+                    statFilter === kind
+                      ? "border-black bg-black text-white"
+                      : "border-transparent hover:border-gray-300 hover:bg-gray-50"
+                  }`}
+                >
+                  <strong className={statFilter === kind ? "text-white" : "text-gray-900"}>{value}</strong> {suffix}
+                </button>
+              ))}
             </div>
 
             <div className="flex items-center gap-2">
@@ -244,6 +391,43 @@ export default function EcosystemPage() {
               ))}
             </div>
           </div>
+
+          {statFilter && (
+            <div className="mb-4 rounded-xl bg-white p-4 shadow">
+              <div className="mb-3 flex items-center justify-between">
+                <div className="text-sm font-semibold text-gray-700">
+                  {STAT_FILTER_TITLES[statFilter]} <span className="font-normal text-gray-400">({statListItems.length})</span>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setStatFilter(null)}
+                  className="rounded-lg border px-3 py-1 text-xs text-gray-600 hover:bg-gray-50"
+                >
+                  Back to overview
+                </button>
+              </div>
+              {statListItems.length === 0 ? (
+                <p className="text-sm text-gray-500">Nothing here yet.</p>
+              ) : (
+                <div className="grid max-h-72 grid-cols-1 gap-1.5 overflow-y-auto sm:grid-cols-2">
+                  {statListItems.map((item) => (
+                    <button
+                      key={item.key}
+                      type="button"
+                      onClick={item.onClick}
+                      className="rounded border px-3 py-2 text-left text-sm hover:bg-gray-50"
+                    >
+                      <div className="font-medium text-gray-800">{item.label}</div>
+                      <div className="text-xs text-gray-500">{item.sublabel}</div>
+                    </button>
+                  ))}
+                </div>
+              )}
+              <p className="mt-2 text-xs text-gray-400">
+                Pick an item to drill into its detail panel below - click the stat again, or &ldquo;Back to overview&rdquo;, to drill back up.
+              </p>
+            </div>
+          )}
 
           <p className="mb-4 text-sm text-gray-500">{AUDIENCE_COPY[audience].blurb}</p>
 
@@ -299,26 +483,71 @@ export default function EcosystemPage() {
             )}
           </div>
 
-          <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
-            <div className="lg:col-span-2">
-              <EcosystemGraph
-                graph={graph}
-                selectedId={selectedId}
-                onSelect={applySelection}
-                expanded={expanded}
-                onToggleExpand={toggleExpand}
-              />
+          {mapExpanded ? (
+            <div className="fixed inset-0 z-50 flex flex-col overflow-y-auto bg-gray-100 p-6">
+              <div className="mb-4 flex items-center justify-between">
+                <h2 className="text-xl font-bold">Ecosystem map &mdash; expanded view</h2>
+                <button
+                  type="button"
+                  onClick={() => setMapExpanded(false)}
+                  className="rounded-lg border bg-white px-3 py-1.5 text-sm hover:bg-gray-50"
+                >
+                  Exit expanded view ✕
+                </button>
+              </div>
+              <div className="grid flex-1 grid-cols-1 gap-6 lg:grid-cols-4">
+                <div className="lg:col-span-3">
+                  <EcosystemGraph
+                    graph={graph}
+                    selectedId={selectedId}
+                    onSelect={applySelection}
+                    expanded={expanded}
+                    onToggleExpand={toggleExpand}
+                    heightClass="h-[calc(100vh-200px)]"
+                  />
+                </div>
+                <div className="space-y-6 overflow-y-auto">
+                  <EcosystemNodePanel
+                    graph={graph}
+                    selection={selection}
+                    audience={audience}
+                    onClose={() => setSelection(null)}
+                    onSelectDataset={selectDataset}
+                  />
+                </div>
+              </div>
             </div>
-            <div className="space-y-6">
-              <EcosystemNodePanel
-                graph={graph}
-                selection={selection}
-                audience={audience}
-                onClose={() => setSelection(null)}
-                onSelectDataset={selectDataset}
-              />
+          ) : (
+            <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
+              <div className="lg:col-span-2">
+                <div className="mb-2 flex justify-end">
+                  <button
+                    type="button"
+                    onClick={() => setMapExpanded(true)}
+                    className="rounded-lg border bg-white px-3 py-1.5 text-sm hover:bg-gray-50"
+                  >
+                    Expand map ⤢
+                  </button>
+                </div>
+                <EcosystemGraph
+                  graph={graph}
+                  selectedId={selectedId}
+                  onSelect={applySelection}
+                  expanded={expanded}
+                  onToggleExpand={toggleExpand}
+                />
+              </div>
+              <div className="space-y-6">
+                <EcosystemNodePanel
+                  graph={graph}
+                  selection={selection}
+                  audience={audience}
+                  onClose={() => setSelection(null)}
+                  onSelectDataset={selectDataset}
+                />
+              </div>
             </div>
-          </div>
+          )}
         </>
       )}
     </main>

@@ -32,6 +32,10 @@ type Props = {
   onSelect: (selection: EcosystemSelection) => void;
   expanded: Set<string>;
   onToggleExpand: (sourceId: string) => void;
+  // Lets the host page swap in a taller canvas for the expanded/fullscreen
+  // view (see EcosystemPage's "Expand map" toggle) without this component
+  // needing to know why - it just renders whatever height it's given.
+  heightClass?: string;
 };
 
 // Reads left-to-right the same direction data actually flows: front
@@ -246,7 +250,14 @@ function glossaryTermNode(
  * "incrementally shown, hop by hop" behavior: expand more sources and
  * the map gets more granular, one hop at a time, in either direction.
  */
-export default function EcosystemGraph({ graph, selectedId, onSelect, expanded, onToggleExpand }: Props) {
+export default function EcosystemGraph({
+  graph,
+  selectedId,
+  onSelect,
+  expanded,
+  onToggleExpand,
+  heightClass,
+}: Props) {
   const datasetsBySource = useMemo(() => {
     const map = new Map<string, EcosystemDatasetNode[]>();
     graph.datasets.forEach((dataset) => {
@@ -455,10 +466,10 @@ export default function EcosystemGraph({ graph, selectedId, onSelect, expanded, 
         </span>
       </div>
 
-      <div className="h-[640px] rounded-lg border bg-white">
+      <div className={`${heightClass ?? "h-[640px]"} rounded-lg border bg-white`}>
         <ReactFlow nodes={nodes} edges={edges} onNodeClick={handleNodeClick} fitView>
           <MiniMap />
-          <Controls />
+          <Controls showInteractive={false} />
           <Background />
         </ReactFlow>
       </div>
