@@ -601,6 +601,12 @@
     var appUrl;
     if (host === "localhost" || host === "127.0.0.1" || host === "") {
       appUrl = "http://localhost:3000";
+    } else if (host.indexOf("app.") === 0) {
+      // This page is itself being served from the app. subdomain (e.g.
+      // a tunnel/DNS setup that points app.<domain> at this same
+      // marketing site rather than only the intended datafetech.com
+      // apex) - don't prepend a second "app." on top of it.
+      appUrl = window.location.protocol + "//" + host;
     } else {
       appUrl = window.location.protocol + "//app." + host;
     }
