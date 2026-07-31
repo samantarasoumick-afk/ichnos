@@ -453,6 +453,75 @@ def _resolve_query_scope(
     return "", []
 
 
+def _find_mentioned_dataset_with_history(
+    datasets: list[Dataset],
+    normalized_query: str,
+    history: list[dict] | None,
+) -> Dataset | None:
+    """
+    Same as _find_mentioned_dataset, but falls back to the conversation
+    history when the current question doesn't name anything itself -
+    a follow-up like "who owns it" or "is that PII" never mentions a
+    dataset by name, so without this the deterministic handlers below
+    had no way to know what "it"/"that" referred to and would forget
+    the subject the moment the very next question was asked (a real
+    reported bug: "public.customers" from the first answer meant
+    nothing to the second question). Walks backwards through prior
+    turns - most recent first - since that's whatever the conversation
+    was just about; reuses the exact same name-matching logic against
+    each turn's raw text rather than a separate resolution path.
+    """
+
+    dataset = _find_mentioned_dataset(datasets, normalized_query)
+    if dataset is not None:
+        return dataset
+
+    if not history:
+        return None
+
+    for turn in reversed(history):
+        text = (turn.get("text") or "").lower().strip()
+        if not text:
+            continue
+        dataset = _find_mentioned_dataset(datasets, text)
+        if dataset is not None:
+            return dataset
+
+    return None
+
+
+def _resolve_query_scope_with_history(
+    datasets: list[Dataset],
+    sources: list[DataSource],
+    normalized_query: str,
+    history: list[dict] | None,
+) -> tuple[str, list[Dataset]]:
+    """The lineage intent's equivalent of
+    _find_mentioned_dataset_with_history - falls back to conversation
+    history for the broader dataset/source/schema scope resolution
+    lineage questions use, so "what about its downstream tables?"
+    resolves against whatever system/dataset the conversation was just
+    about instead of coming back empty.
+    """
+
+    label, scope = _resolve_query_scope(datasets, sources, normalized_query)
+    if scope:
+        return label, scope
+
+    if not history:
+        return label, scope
+
+    for turn in reversed(history):
+        text = (turn.get("text") or "").lower().strip()
+        if not text:
+            continue
+        label, scope = _resolve_query_scope(datasets, sources, text)
+        if scope:
+            return label, scope
+
+    return "", []
+
+
 def _answer_pii_question(
     datasets: list[Dataset],
     sources: list[DataSource],
@@ -538,12 +607,16 @@ def _answer_pii_question(
     }
 
 
-def _answer_ownership_question(datasets: list[Dataset], normalized_query: str) -> dict | None:
+def _answer_ownership_question(
+    datasets: list[Dataset],
+    normalized_query: str,
+    history: list[dict] | None = None,
+) -> dict | None:
 
     if not any(keyword in normalized_query for keyword in OWNERSHIP_KEYWORDS):
         return None
 
-    dataset = _find_mentioned_dataset(datasets, normalized_query)
+    dataset = _find_mentioned_dataset_with_history(datasets, normalized_query, history)
 
     if dataset is None:
         return {
@@ -570,12 +643,13 @@ def _answer_lineage_question(
     datasets: list[Dataset],
     sources: list[DataSource],
     normalized_query: str,
+    history: list[dict] | None = None,
 ) -> dict | None:
 
     if not any(keyword in normalized_query for keyword in LINEAGE_KEYWORDS):
         return None
 
-    label, scope = _resolve_query_scope(datasets, sources, normalized_query)
+    label, scope = _resolve_query_scope_with_history(datasets, sources, normalized_query, history)
 
     if not scope:
         return {
@@ -677,6 +751,7 @@ def _answer_quality_question(
     db: Session,
     datasets: list[Dataset],
     normalized_query: str,
+    history: list[dict] | None = None,
 ) -> dict | None:
     """
     Answers "how's data quality / what's the quality score / how
@@ -692,7 +767,7 @@ def _answer_quality_question(
     if not any(keyword in normalized_query for keyword in QUALITY_KEYWORDS):
         return None
 
-    dataset = _find_mentioned_dataset(datasets, normalized_query)
+    dataset = _find_mentioned_dataset_with_history(datasets, normalized_query, history)
 
     if dataset is not None:
         label = f"{dataset.schema_name}.{dataset.name}"
@@ -923,7 +998,7 @@ def _answer_question_core(
     # itself folds in PII context (see wants_pii_focus above) when
     # both kinds of keywords are present, so nothing is lost by
     # checking it first.
-    result = _answer_lineage_question(db, datasets, data_sources, normalized_query)
+    result = _answer_lineage_question(db, datasets, data_sources, normalized_query, history=history)
     if result is not None:
         return result
 
@@ -931,14 +1006,14 @@ def _answer_question_core(
     if result is not None:
         return result
 
-    result = _answer_ownership_question(datasets, normalized_query)
+    result = _answer_ownership_question(datasets, normalized_query, history=history)
     if result is not None:
         return result
 
     # Checked before governance: "quality score"/"data quality" wording
     # is about the profiled DataQuality/effective-quality numbers, a
     # different metric than governance maturity - see QUALITY_KEYWORDS.
-    result = _answer_quality_question(db, datasets, normalized_query)
+    result = _answer_quality_question(db, datasets, normalized_query, history=history)
     if result is not None:
         return result
 

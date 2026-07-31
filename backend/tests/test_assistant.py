@@ -97,6 +97,13 @@ class AssistantTests(unittest.TestCase):
         self.assertEqual(r.status_code, 200, r.text)
         return r.json()
 
+    def _ask_with_history(self, headers, query, history):
+        r = self.client.post(
+            "/api/assistant/ask", headers=headers, json={"query": query, "history": history}
+        )
+        self.assertEqual(r.status_code, 200, r.text)
+        return r.json()
+
     def test_empty_catalog_says_so(self):
         headers = self._register_and_login(f"a1{self._n}@a.com", f"Assistant Org 1 {self._n}")
         body = self._ask(headers, "what datasets do we have")
@@ -139,6 +146,75 @@ class AssistantTests(unittest.TestCase):
 
         body = self._ask(headers, "who owns this")
         self.assertIn("name a specific dataset", body["answer"])
+
+    def test_followup_question_resolves_dataset_from_conversation_history(self):
+        # Regression test: a real reported bug - the first answer names
+        # a dataset ("public.customers"), and a follow-up that doesn't
+        # repeat the name ("who owns it") "forgot" that subject entirely
+        # and fell back to the generic no-dataset-named prompt, because
+        # the deterministic ownership handler only ever looked at the
+        # current message's text, never the conversation history it was
+        # already being sent.
+        headers = self._register_and_login(f"amem1{self._n}@a.com", f"Assistant Org Mem1 {self._n}")
+        source_id = self._create_source(headers, f"SM1{self._n}")
+        self._scan(headers, source_id, SCAN_RESULT)
+
+        self.client.patch(
+            f"/api/governance/datasets/{self.client.get('/api/datasets', headers=headers).json()[0]['id']}",
+            headers=headers,
+            json={"owner": "Priya"},
+        )
+
+        first = self._ask(headers, "which datasets have PII?")
+        self.assertIn("customers", first["answer"])
+
+        history = [
+            {"role": "user", "text": "which datasets have PII?"},
+            {"role": "assistant", "text": first["answer"]},
+        ]
+        second = self._ask_with_history(headers, "who owns it?", history)
+        self.assertIn("Priya", second["answer"])
+        self.assertNotIn("name a specific dataset", second["answer"])
+
+    def test_followup_lineage_question_resolves_dataset_from_history(self):
+        headers = self._register_and_login(f"amem2{self._n}@a.com", f"Assistant Org Mem2 {self._n}")
+        source_id = self._create_source(headers, f"SM2{self._n}")
+        self._scan(headers, source_id, SCAN_RESULT)
+        self._scan(headers, source_id, ORDERS_SCAN_RESULT)
+
+        datasets = self.client.get("/api/datasets", headers=headers).json()
+        customers_id = next(d["id"] for d in datasets if d["name"] == "customers")
+        orders_id = next(d["id"] for d in datasets if d["name"] == "orders")
+        self.client.post("/api/lineage", headers=headers, json={
+            "upstream_dataset_id": customers_id,
+            "downstream_dataset_id": orders_id,
+            "transformation_type": "join",
+        })
+
+        first = self._ask(headers, "who owns customers?")
+
+        history = [
+            {"role": "user", "text": "who owns customers?"},
+            {"role": "assistant", "text": first["answer"]},
+        ]
+        second = self._ask_with_history(headers, "what's downstream of it?", history)
+        self.assertIn("orders", second["answer"])
+        self.assertNotIn("name a specific dataset or", second["answer"])
+
+    def test_followup_quality_question_resolves_dataset_from_history(self):
+        headers = self._register_and_login(f"amem3{self._n}@a.com", f"Assistant Org Mem3 {self._n}")
+        source_id = self._create_source(headers, f"SM3{self._n}")
+        self._scan(headers, source_id, ORDERS_SCAN_RESULT)
+
+        first = self._ask(headers, "who owns orders?")
+
+        history = [
+            {"role": "user", "text": "who owns orders?"},
+            {"role": "assistant", "text": first["answer"]},
+        ]
+        second = self._ask_with_history(headers, "what's its quality score?", history)
+        self.assertIn("quality score", second["answer"])
+        self.assertNotIn("Governance maturity:", second["answer"])
 
     def test_lineage_intent_reports_downstream(self):
         headers = self._register_and_login(f"a6{self._n}@a.com", f"Assistant Org 6 {self._n}")
