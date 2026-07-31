@@ -5,11 +5,14 @@ import { useState } from "react";
 
 import api from "../services/api";
 import type {
+  DataQuality,
   EcosystemDatasetNode,
   EcosystemGraph as EcosystemGraphData,
   EcosystemTrace,
   EcosystemTraceDirection,
+  EffectiveQuality,
 } from "../types/metadata";
+import DataQualityBars from "./DataQualityBars";
 import type { EcosystemSelection } from "./EcosystemGraph";
 
 type Audience = "analyst" | "owner";
@@ -102,6 +105,66 @@ function EcosystemLineageList({
           </button>
         ))}
       </div>
+    </div>
+  );
+}
+
+// A number/sentence tells you *whether* to trust this data; it never
+// tells you *why*. This expands on demand into the same
+// completeness/uniqueness/validity/consistency/freshness breakdown
+// the dataset detail page's Business View tab shows, fetched lazily
+// (only once, the first time it's opened) since most panel visits
+// never need it.
+function QualityDrilldown({ datasetId }: { datasetId: string }) {
+  const [open, setOpen] = useState(false);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [fetched, setFetched] = useState(false);
+  const [dataQuality, setDataQuality] = useState<DataQuality | null>(null);
+  const [effectiveQuality, setEffectiveQuality] = useState<EffectiveQuality | null>(null);
+
+  async function toggle() {
+    const next = !open;
+    setOpen(next);
+    if (!next || fetched) return;
+
+    setLoading(true);
+    setError(null);
+    try {
+      const [qualityResult, effectiveResult] = await Promise.allSettled([
+        api.get<DataQuality>(`/api/data-quality/dataset/${datasetId}`),
+        api.get<EffectiveQuality>(`/api/data-quality/dataset/${datasetId}/effective`),
+      ]);
+      setDataQuality(qualityResult.status === "fulfilled" ? qualityResult.value.data : null);
+      setEffectiveQuality(effectiveResult.status === "fulfilled" ? effectiveResult.value.data : null);
+      setFetched(true);
+    } catch (err) {
+      console.error(err);
+      setError("Unable to load the quality breakdown right now.");
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  return (
+    <div className="mt-1">
+      <button
+        type="button"
+        onClick={toggle}
+        className="text-xs font-medium text-blue-700 hover:underline"
+      >
+        {open ? "Hide quality breakdown" : "View quality breakdown ↓"}
+      </button>
+
+      {open && (
+        <div className="mt-2 rounded-lg border bg-gray-50 p-3">
+          {loading && <div className="text-xs text-gray-400">Loading breakdown...</div>}
+          {error && <div className="text-xs text-red-600">{error}</div>}
+          {!loading && !error && fetched && (
+            <DataQualityBars dataQuality={dataQuality} effectiveQuality={effectiveQuality} />
+          )}
+        </div>
+      )}
     </div>
   );
 }
@@ -358,6 +421,7 @@ export default function EcosystemNodePanel({ graph, selection, audience, onClose
           <Row label="Governance status" value={dataset.governance_status ?? "UNKNOWN"} />
           <Row label="Governance score" value={dataset.governance_score ?? 0} />
           <Row label="Quality score" value={dataset.quality_score ?? 0} />
+          <QualityDrilldown datasetId={dataset.id} />
           <Row label="Freshness" value={dataset.freshness_status ?? "UNKNOWN"} />
           <Row label="Contract status" value={dataset.contract_status ?? "NO_CONTRACT"} />
           <Row label="Purpose" value={dataset.purpose || "–"} />
@@ -368,7 +432,10 @@ export default function EcosystemNodePanel({ graph, selection, audience, onClose
       ) : (
         <div className="mb-4 space-y-2">
           <Sentence>{governanceSentence(dataset.governance_status)}</Sentence>
-          <Sentence>{qualitySentence(dataset.quality_score)}</Sentence>
+          <div>
+            <Sentence>{qualitySentence(dataset.quality_score)}</Sentence>
+            <QualityDrilldown datasetId={dataset.id} />
+          </div>
           <Sentence>{privacySentence(dataset)}</Sentence>
           <Sentence>{contractSentence(dataset.contract_status)}</Sentence>
         </div>
