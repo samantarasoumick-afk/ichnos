@@ -160,6 +160,85 @@ class AssistantTests(unittest.TestCase):
         body = self._ask(headers, "what's downstream of customers?")
         self.assertIn("orders", body["answer"])
 
+    def test_lineage_question_resolves_a_source_name_not_just_a_dataset_name(self):
+        # No dataset is ever literally named "salesforce" - the tables
+        # under a source are things like "customers"/"leads", grouped
+        # by schema_name. A question naming the *system* ("Salesforce
+        # CRM") rather than one of its tables has to resolve via the
+        # source name (or shared schema), not a dataset-name substring
+        # match, which is exactly what the old implementation required
+        # and could never satisfy for a query like this.
+        headers = self._register_and_login(f"a14{self._n}@a.com", f"Assistant Org 14 {self._n}")
+        source_id = self._create_source(headers, "Salesforce CRM")
+        self._scan(headers, source_id, SCAN_RESULT)
+
+        other_source_id = self._create_source(headers, f"Warehouse{self._n}")
+        self._scan(headers, other_source_id, ORDERS_SCAN_RESULT)
+
+        datasets = self.client.get("/api/datasets", headers=headers).json()
+        customers_id = next(d["id"] for d in datasets if d["name"] == "customers")
+        orders_id = next(d["id"] for d in datasets if d["name"] == "orders")
+
+        r = self.client.post("/api/lineage", headers=headers, json={
+            "upstream_dataset_id": customers_id,
+            "downstream_dataset_id": orders_id,
+            "transformation_type": "join",
+        })
+        self.assertEqual(r.status_code, 200, r.text)
+
+        body = self._ask(headers, "where is data from salesforceCRM flowing")
+        self.assertIn("orders", body["answer"])
+
+    def test_pii_flow_question_names_the_system_and_flags_downstream_pii(self):
+        # The exact shape of question that used to be silently
+        # mis-answered: it mentions both a system ("salesforceCRM")
+        # and PII wording ("PII data") together with "flowing". Before
+        # the fix, the PII intent (checked first) matched on "PII" and
+        # returned the generic top-10-sensitivity list, completely
+        # ignoring "salesforceCRM" and never touching lineage at all.
+        headers = self._register_and_login(f"a15{self._n}@a.com", f"Assistant Org 15 {self._n}")
+        source_id = self._create_source(headers, "Salesforce CRM")
+        self._scan(headers, source_id, SCAN_RESULT)
+
+        other_source_id = self._create_source(headers, f"Warehouse{self._n}")
+        # Downstream also carries its own PII column (email), so the
+        # PII-focused branch of the lineage answer has something to
+        # flag.
+        downstream_scan = {
+            "datasets": [{
+                "schema_name": "public", "table_name": "orders",
+                "columns": [("id", "integer", "NO"), ("email", "text", "YES")],
+                "row_count": 1,
+                "column_stats": {
+                    "id": {"non_null": 1, "distinct": 1},
+                    "email": {"non_null": 1, "distinct": 1},
+                },
+                "column_samples": {"id": ["1"], "email": ["a@b.com"]},
+            }],
+            "foreign_keys": [],
+        }
+        self._scan(headers, other_source_id, downstream_scan)
+
+        datasets = self.client.get("/api/datasets", headers=headers).json()
+        customers_id = next(d["id"] for d in datasets if d["name"] == "customers")
+        orders_id = next(d["id"] for d in datasets if d["name"] == "orders")
+
+        r = self.client.post("/api/lineage", headers=headers, json={
+            "upstream_dataset_id": customers_id,
+            "downstream_dataset_id": orders_id,
+            "transformation_type": "join",
+        })
+        self.assertEqual(r.status_code, 200, r.text)
+
+        body = self._ask(headers, "where is salesforceCRM PII data flowing")
+
+        # Went through the lineage handler (names the actual downstream
+        # dataset and flags its PII), not the generic PII list, which
+        # never mentions any specific system by name.
+        self.assertIn("orders", body["answer"])
+        self.assertNotIn("carry meaningful personal-data risk", body["answer"])
+        self.assertIn("PII column", body["answer"])
+
     def test_governance_intent_reports_maturity_level(self):
         headers = self._register_and_login(f"a7{self._n}@a.com", f"Assistant Org 7 {self._n}")
         source_id = self._create_source(headers, f"S7{self._n}")

@@ -35,6 +35,7 @@ from sqlalchemy.orm import Session
 
 from app.models.dataset import Dataset
 from app.models.lineage import DatasetLineage
+from app.models.source import DataSource
 
 from app.services.embedding_service import semantic_search
 from app.services.lineage_quality_service import compute_effective_quality
@@ -64,7 +65,9 @@ OWNERSHIP_KEYWORDS = (
 
 LINEAGE_KEYWORDS = (
     "upstream", "downstream", "depends on", "dependency", "dependencies",
-    "impact", "affects", "feeds into", "feeds from"
+    "impact", "affects", "feeds into", "feeds from",
+    "flow", "flows", "flowing", "trace", "traces", "tracing",
+    "goes to", "moves to", "travels to"
 )
 
 GOVERNANCE_KEYWORDS = (
@@ -320,22 +323,107 @@ def _try_llm_answer(
     return {"answer": answer, "sources": sources}
 
 
+def _compact(text: str) -> str:
+    """Lowercased, alphanumeric-only. Lets a question typed as one
+    compound word ("salesforceCRM", "SalesforceCRM") match a schema or
+    source name that's actually spaced/underscored/differently-cased
+    ("Salesforce CRM", "salesforce_crm") - plain substring matching on
+    the raw query would miss all of those.
+    """
+    return "".join(ch for ch in text.lower() if ch.isalnum())
+
+
 def _find_mentioned_dataset(datasets: list[Dataset], normalized_query: str) -> Dataset | None:
     """
-    Longest-name-first substring match, so "customer_orders" being
-    asked about doesn't get shadowed by a shorter "customers" dataset
-    that also happens to substring-match.
+    Longest-name-first match against either the dataset's own name or
+    its schema name, compared with spacing/case/punctuation stripped
+    out - so "customer_orders" being asked about doesn't get shadowed
+    by a shorter "customers" dataset that also happens to
+    substring-match, and a schema like "salesforce" is matched too, not
+    just the table name.
     """
 
-    candidates = [
-        dataset for dataset in datasets
-        if dataset.name and dataset.name.lower() in normalized_query
-    ]
+    compact_query = _compact(normalized_query)
+
+    candidates = []
+    for dataset in datasets:
+        for name in (dataset.name, dataset.schema_name):
+            if not name:
+                continue
+            compact_name = _compact(name)
+            if compact_name and compact_name in compact_query:
+                candidates.append((dataset, compact_name))
+                break
 
     if not candidates:
         return None
 
-    return max(candidates, key=lambda dataset: len(dataset.name))
+    return max(candidates, key=lambda pair: len(pair[1]))[0]
+
+
+def _resolve_query_scope(
+    datasets: list[Dataset],
+    sources: list[DataSource],
+    normalized_query: str,
+) -> tuple[str, list[Dataset]]:
+    """
+    Resolves the system/dataset a lineage question is actually about,
+    trying progressively broader matches: a specific dataset name
+    first (most precise - a single table), then a source name (e.g.
+    "Salesforce CRM" - everything that system feeds), then a shared
+    schema name (e.g. "salesforce" alone, which is how datasets
+    ingested from a source are actually grouped). Returns (label,
+    scope) where scope is every dataset the matched entity resolves
+    to - exactly one for a dataset-name match, potentially several for
+    a source/schema match. Returns ("", []) if nothing in the question
+    matches anything in the catalog.
+
+    This exists because a question like "where is data from Salesforce
+    flowing" names a *system*, not a single table - the old
+    dataset-name-only match could never resolve it, since no dataset
+    is literally named "salesforce" (the tables underneath it are
+    "leads", "opportunities", etc., sharing schema_name="salesforce").
+    """
+
+    compact_query = _compact(normalized_query)
+
+    dataset_candidates = []
+    for dataset in datasets:
+        if dataset.name:
+            compact_name = _compact(dataset.name)
+            if compact_name and compact_name in compact_query:
+                dataset_candidates.append((dataset, compact_name))
+
+    if dataset_candidates:
+        best = max(dataset_candidates, key=lambda pair: len(pair[1]))[0]
+        return f"{best.schema_name}.{best.name}", [best]
+
+    source_candidates = []
+    for source in sources:
+        if source.name:
+            compact_name = _compact(source.name)
+            if compact_name and compact_name in compact_query:
+                source_candidates.append((source, compact_name))
+
+    if source_candidates:
+        best_source = max(source_candidates, key=lambda pair: len(pair[1]))[0]
+        matched = [d for d in datasets if d.source_id == best_source.id]
+        if matched:
+            return best_source.name, matched
+
+    schema_candidates = []
+    for schema in {d.schema_name for d in datasets if d.schema_name}:
+        compact_name = _compact(schema)
+        if compact_name and compact_name in compact_query:
+            schema_candidates.append((schema, compact_name))
+
+    if schema_candidates:
+        best_schema = max(schema_candidates, key=lambda pair: len(pair[1]))[0]
+        matched = [d for d in datasets if d.schema_name == best_schema]
+        if matched:
+            return best_schema, matched
+
+    return "", []
 
 
 def _answer_pii_question(datasets: list[Dataset], normalized_query: str) -> dict | None:
@@ -403,73 +491,108 @@ def _answer_ownership_question(datasets: list[Dataset], normalized_query: str) -
 def _answer_lineage_question(
     db: Session,
     datasets: list[Dataset],
+    sources: list[DataSource],
     normalized_query: str,
 ) -> dict | None:
 
     if not any(keyword in normalized_query for keyword in LINEAGE_KEYWORDS):
         return None
 
-    dataset = _find_mentioned_dataset(datasets, normalized_query)
+    label, scope = _resolve_query_scope(datasets, sources, normalized_query)
 
-    if dataset is None:
+    if not scope:
         return {
             "answer": (
-                "I can answer lineage questions once you name a specific dataset - "
-                "try something like \"what's downstream of orders\"."
+                "I can answer lineage questions once you name a specific dataset or "
+                "system - try something like \"what's downstream of orders\" or "
+                "\"where is data from Salesforce flowing\"."
             ),
             "sources": [],
         }
 
-    upstream_edges = (
-        db.query(DatasetLineage)
-        .filter(DatasetLineage.downstream_dataset_id == dataset.id)
-        .all()
-    )
-
-    downstream_edges = (
-        db.query(DatasetLineage)
-        .filter(DatasetLineage.upstream_dataset_id == dataset.id)
-        .all()
-    )
-
+    scope_ids = {d.id for d in scope}
     dataset_by_id = {d.id: d for d in datasets}
 
     def _label(dataset_id):
         found = dataset_by_id.get(dataset_id)
         return f"{found.schema_name}.{found.name}" if found else dataset_id
 
-    lines = []
+    upstream_edges = (
+        db.query(DatasetLineage)
+        .filter(DatasetLineage.downstream_dataset_id.in_(scope_ids))
+        .all()
+    )
+    downstream_edges = (
+        db.query(DatasetLineage)
+        .filter(DatasetLineage.upstream_dataset_id.in_(scope_ids))
+        .all()
+    )
 
-    if upstream_edges:
+    # Only edges that actually leave the resolved scope - two datasets
+    # under the same source feeding each other is internal to that
+    # system, not "upstream/downstream of it".
+    upstream_ids = sorted({
+        e.upstream_dataset_id for e in upstream_edges
+        if e.upstream_dataset_id not in scope_ids
+    })
+    downstream_ids = sorted({
+        e.downstream_dataset_id for e in downstream_edges
+        if e.downstream_dataset_id not in scope_ids
+    })
+
+    # A question like "where is Salesforce PII data flowing" is asking
+    # two things at once - lineage AND privacy. Answering only the
+    # lineage half (a bare list of downstream tables) misses the point
+    # of the question, so when a PII keyword is also present, call out
+    # which of those downstream datasets carry personal data themselves.
+    wants_pii_focus = any(keyword in normalized_query for keyword in PII_KEYWORDS)
+
+    lines = [f"{label}:" if len(scope) > 1 else label]
+
+    if upstream_ids:
+        lines.append("Upstream (feeds into this): " + ", ".join(_label(i) for i in upstream_ids))
+
+    if downstream_ids:
         lines.append(
-            "Depends on (upstream): "
-            + ", ".join(_label(e.upstream_dataset_id) for e in upstream_edges)
+            ("Downstream (data from here flows into): " if wants_pii_focus else "Downstream (would be affected): ")
+            + ", ".join(_label(i) for i in downstream_ids)
         )
 
-    if downstream_edges:
-        lines.append(
-            "Would be affected (downstream): "
-            + ", ".join(_label(e.downstream_dataset_id) for e in downstream_edges)
-        )
+        if wants_pii_focus:
+            pii_hits = [
+                i for i in downstream_ids
+                if dataset_by_id.get(i) and (dataset_by_id[i].pii_columns or 0) > 0
+            ]
+            if pii_hits:
+                lines.append(
+                    "Of those, these downstream dataset(s) also carry PII columns of their own: "
+                    + ", ".join(
+                        f"{_label(i)} ({dataset_by_id[i].pii_columns} PII column(s))"
+                        for i in pii_hits
+                    )
+                )
+            else:
+                lines.append(
+                    "None of those downstream datasets have their own columns classified as "
+                    "PII yet - the personal data may still be flowing through unclassified, "
+                    "so it's worth a rescan or a manual check."
+                )
 
-    if not lines:
-        lines.append("No lineage relationships are recorded for this dataset yet.")
+    if not upstream_ids and not downstream_ids:
+        lines.append("No lineage relationships are recorded for this yet.")
 
-    sources = [
-        {"type": "dataset", "id": dataset.id, "label": f"{dataset.schema_name}.{dataset.name}"}
+    result_sources = [
+        {"type": "dataset", "id": d.id, "label": f"{d.schema_name}.{d.name}"}
+        for d in scope
     ]
-    sources += [
-        {"type": "dataset", "id": e.upstream_dataset_id, "label": _label(e.upstream_dataset_id)}
-        for e in upstream_edges
-    ]
-    sources += [
-        {"type": "dataset", "id": e.downstream_dataset_id, "label": _label(e.downstream_dataset_id)}
-        for e in downstream_edges
+    result_sources += [
+        {"type": "dataset", "id": i, "label": _label(i)}
+        for i in list(upstream_ids) + list(downstream_ids)
     ]
 
     return {
-        "answer": f"{dataset.schema_name}.{dataset.name}\n" + "\n".join(lines),
-        "sources": sources,
+        "answer": "\n".join(lines),
+        "sources": result_sources,
     }
 
 
@@ -598,15 +721,30 @@ def answer_question(
 
     normalized_query = query.lower().strip()
 
+    data_sources = (
+        db.query(DataSource)
+        .filter(DataSource.organization_id == organization_id)
+        .all()
+    )
+
+    # Checked before the plain PII intent below: a question that
+    # mentions both a system/dataset AND PII/lineage wording (e.g.
+    # "where is Salesforce PII data flowing") is a lineage question
+    # with a privacy angle, not a request for the org-wide PII list -
+    # if it matched the PII intent first, the specific system named in
+    # the question would just get ignored. _answer_lineage_question
+    # itself folds in PII context (see wants_pii_focus above) when
+    # both kinds of keywords are present, so nothing is lost by
+    # checking it first.
+    result = _answer_lineage_question(db, datasets, data_sources, normalized_query)
+    if result is not None:
+        return result
+
     result = _answer_pii_question(datasets, normalized_query)
     if result is not None:
         return result
 
     result = _answer_ownership_question(datasets, normalized_query)
-    if result is not None:
-        return result
-
-    result = _answer_lineage_question(db, datasets, normalized_query)
     if result is not None:
         return result
 
