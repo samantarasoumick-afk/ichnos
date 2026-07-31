@@ -161,7 +161,18 @@ export default function AskPage() {
       setConversation((prev) => [...prev, assistantEntry]);
     } catch (error) {
       console.error(error);
-      setErrorMessage("Unable to reach the assistant right now.");
+
+      // Surface the backend's actual detail when there is one (e.g. a
+      // 429 from the daily Ask'Fe' quota - "Your Free plan includes 20
+      // Ask'Fe' questions per day...") instead of always showing the
+      // same generic string, which used to swallow that message
+      // entirely and make a plan limit look like a network outage.
+      // Same pattern used elsewhere in the app (DemoDataPanel,
+      // CertificationQueue, etc.)
+      const detail =
+        (error as { response?: { data?: { detail?: string } } })?.response?.data?.detail;
+
+      setErrorMessage(detail || "Unable to reach the assistant right now.");
     } finally {
       setAsking(false);
     }

@@ -28,6 +28,7 @@ deterministic paths, unchanged from before:
 """
 
 import os
+import re
 
 import requests
 
@@ -472,6 +473,20 @@ def _resolve_query_scope(
     return "", []
 
 
+# Word-boundary (not substring) match on purpose - "it" as a bare
+# substring is inside "quality", "identifier", "sensitivity" and would
+# false-positive on nearly every question. Used to gate the quality
+# handler's history fallback (see _answer_quality_question) - a
+# referential pronoun is what actually signals "this question is a
+# follow-up about the same thing as before", as opposed to a
+# freestanding org-wide question like "how's our data quality looking".
+_REFERENTIAL_PRONOUN_RE = re.compile(r"\b(it|its|this|that|these|those)\b")
+
+
+def _has_referential_pronoun(normalized_query: str) -> bool:
+    return bool(_REFERENTIAL_PRONOUN_RE.search(normalized_query))
+
+
 def _find_mentioned_dataset_with_history(
     datasets: list[Dataset],
     normalized_query: str,
@@ -781,12 +796,25 @@ def _answer_quality_question(
     org-wide governance maturity instead, which is a different metric
     entirely (certification/stewardship/contract coverage, not
     completeness/uniqueness/validity/freshness/consistency).
+
+    Unlike ownership/lineage (which always need a specific dataset and
+    have no other useful answer to give), quality has a genuinely
+    meaningful org-wide answer when nothing is named - so the history
+    fallback here is gated on an actual referential pronoun ("it",
+    "this", etc.) rather than applied unconditionally. Without that
+    gate, a freestanding org-wide question like "how's our data quality
+    looking?" asked right after a dataset-specific question would
+    wrongly latch onto that prior dataset instead of giving the
+    intended org-wide summary - a real regression caught while
+    verifying the conversation-memory fix.
     """
 
     if not any(keyword in normalized_query for keyword in QUALITY_KEYWORDS):
         return None
 
-    dataset = _find_mentioned_dataset_with_history(datasets, normalized_query, history)
+    dataset = _find_mentioned_dataset(datasets, normalized_query)
+    if dataset is None and _has_referential_pronoun(normalized_query):
+        dataset = _find_mentioned_dataset_with_history(datasets, normalized_query, history)
 
     if dataset is not None:
         label = f"{dataset.schema_name}.{dataset.name}"

@@ -216,6 +216,31 @@ class AssistantTests(unittest.TestCase):
         self.assertIn("quality score", second["answer"])
         self.assertNotIn("Governance maturity:", second["answer"])
 
+    def test_org_wide_quality_followup_is_not_hijacked_by_prior_dataset(self):
+        # Regression test caught while manually verifying the history-
+        # fallback fix above: a freestanding org-wide question ("how's
+        # our data quality looking?") asked right after a dataset-
+        # specific quality question ("what's the quality score for
+        # orders?") was wrongly latching onto "orders" via the history
+        # fallback instead of answering the org-wide question it
+        # actually was - since it names no dataset and has no
+        # referential pronoun ("it"/"this"/etc.), it should NOT pull in
+        # the prior turn's subject.
+        headers = self._register_and_login(f"amem6{self._n}@a.com", f"Assistant Org Mem6 {self._n}")
+        source_id = self._create_source(headers, f"SM6{self._n}")
+        self._scan(headers, source_id, ORDERS_SCAN_RESULT)
+
+        first = self._ask(headers, "what's the quality score for orders?")
+        self.assertIn("orders", first["answer"])
+
+        history = [
+            {"role": "user", "text": "what's the quality score for orders?"},
+            {"role": "assistant", "text": first["answer"]},
+        ]
+        second = self._ask_with_history(headers, "how's our data quality looking overall?", history)
+        self.assertIn("quality profile", second["answer"])
+        self.assertNotIn("orders:", second["answer"])
+
     def test_followup_glossary_question_scoped_to_conversation_dataset(self):
         # Regression test: a real reported bug - "what glossary terms
         # are associated" as a follow-up to "who owns customers?" came
