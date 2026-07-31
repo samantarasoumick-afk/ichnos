@@ -40,6 +40,9 @@ from app.models.lineage import DatasetLineage
 from app.models.risk import RiskDatasetLink
 from app.models.source import DataSource
 
+from app.models.data_quality import DataQuality
+
+from app.services.ecosystem_service import compute_source_rollup
 from app.services.embedding_service import semantic_search
 from app.services.lineage_quality_service import compute_effective_quality
 from app.services.maturity_service import compute_maturity
@@ -75,10 +78,31 @@ LINEAGE_KEYWORDS = (
 
 GOVERNANCE_KEYWORDS = (
     "governance score", "maturity", "how are we doing", "governance status",
-    "certification status", "how many datasets are certified", "quality score"
+    "certification status", "how many datasets are certified"
+)
+
+# Deliberately separate from GOVERNANCE_KEYWORDS: "quality score"/"data
+# quality" used to live in GOVERNANCE_KEYWORDS, which meant a question
+# like "what's the quality score for X" (or just "how's data quality
+# looking") got answered with org-wide governance maturity instead of
+# the actual profiled/lineage-adjusted quality score - a real reported
+# bug. Kept intentionally distinct from "governance" (certification/
+# stewardship/contract coverage) even though both are "how healthy is
+# this" questions, since they pull from different underlying data
+# (DataQuality/compute_effective_quality vs compute_maturity).
+QUALITY_KEYWORDS = (
+    "data quality", "quality score", "dq score", "how clean", "how good is",
+    "how accurate", "completeness", "uniqueness", "validity", "freshness",
+    "consistency", "quality of", "data health"
 )
 
 CONTRACT_KEYWORDS = ("contract", "breach", "breached")
+
+# "which sources/systems have PII" is asking for a system-level rollup
+# (see the source-scope branch in _answer_pii_question below), not the
+# usual per-dataset list - another reported bug where that phrasing
+# came back with raw dataset rows instead of source names.
+SOURCE_SCOPE_KEYWORDS = ("source", "sources", "system", "systems")
 
 
 def _dataset_directory_line(dataset: Dataset) -> str:
@@ -429,10 +453,60 @@ def _resolve_query_scope(
     return "", []
 
 
-def _answer_pii_question(datasets: list[Dataset], normalized_query: str) -> dict | None:
+def _answer_pii_question(
+    datasets: list[Dataset],
+    sources: list[DataSource],
+    normalized_query: str,
+) -> dict | None:
 
     if not any(keyword in normalized_query for keyword in PII_KEYWORDS):
         return None
+
+    # "which sources/systems have PII" is a question about systems, not
+    # tables - answer it with a per-source rollup (same numbers the
+    # Ecosystem View shows, via the shared compute_source_rollup) rather
+    # than falling through to the dataset-level list below, which used
+    # to be the only answer this intent could ever give.
+    if any(keyword in normalized_query for keyword in SOURCE_SCOPE_KEYWORDS):
+        datasets_by_source: dict[str, list[Dataset]] = {}
+        for dataset in datasets:
+            datasets_by_source.setdefault(dataset.source_id, []).append(dataset)
+
+        source_by_id = {source.id: source for source in sources}
+        rollups = []
+        for source_id, source_datasets in datasets_by_source.items():
+            source = source_by_id.get(source_id)
+            if source is None:
+                continue
+            rollup = compute_source_rollup(source_datasets)
+            if rollup["pii_columns"] > 0:
+                rollups.append((source, rollup))
+
+        if not rollups:
+            return {
+                "answer": "None of your connected sources currently carry PII columns.",
+                "sources": [],
+            }
+
+        rollups.sort(key=lambda pair: pair[1]["pii_columns"], reverse=True)
+
+        lines = [
+            f"- {source.name} ({rollup['pii_columns']} PII column(s) across "
+            f"{rollup['dataset_count']} dataset(s))"
+            for source, rollup in rollups
+        ]
+
+        answer = (
+            f"{len(rollups)} source(s) carry PII data. Highest first:\n" + "\n".join(lines)
+        )
+
+        return {
+            "answer": answer,
+            "sources": [
+                {"type": "source", "id": source.id, "label": source.name}
+                for source, _ in rollups
+            ],
+        }
 
     at_risk = [d for d in datasets if d.sensitivity_score in ("MEDIUM", "HIGH")]
 
@@ -599,6 +673,116 @@ def _answer_lineage_question(
     }
 
 
+def _answer_quality_question(
+    db: Session,
+    datasets: list[Dataset],
+    normalized_query: str,
+) -> dict | None:
+    """
+    Answers "how's data quality / what's the quality score / how
+    complete is X" questions with the real profiled numbers
+    (DataQuality's dimension scores plus compute_effective_quality's
+    lineage-adjusted score) - previously "quality score" lived in
+    GOVERNANCE_KEYWORDS, so these questions were silently answered with
+    org-wide governance maturity instead, which is a different metric
+    entirely (certification/stewardship/contract coverage, not
+    completeness/uniqueness/validity/freshness/consistency).
+    """
+
+    if not any(keyword in normalized_query for keyword in QUALITY_KEYWORDS):
+        return None
+
+    dataset = _find_mentioned_dataset(datasets, normalized_query)
+
+    if dataset is not None:
+        label = f"{dataset.schema_name}.{dataset.name}"
+        effective = compute_effective_quality(dataset.id, db)
+        own_score = effective.get("own_score")
+        effective_score = effective.get("effective_score")
+
+        if own_score is None and effective_score is None:
+            answer = (
+                f"{label} hasn't been profiled for data quality yet - no "
+                "completeness/uniqueness/validity/freshness/consistency scan has "
+                "run against it."
+            )
+        else:
+            lines = [
+                f"{label}: own quality score = "
+                f"{own_score if own_score is not None else 'unprofiled'}/100, "
+                "effective (lineage-adjusted) score = "
+                f"{effective_score if effective_score is not None else 'n/a'}/100."
+            ]
+
+            dq = db.query(DataQuality).filter(DataQuality.dataset_id == dataset.id).first()
+            if dq:
+                dims = [
+                    f"{name}={round(value, 1)}"
+                    for name, value in (
+                        ("completeness", dq.completeness),
+                        ("uniqueness", dq.uniqueness),
+                        ("validity", dq.validity),
+                        ("freshness", dq.freshness),
+                        ("consistency", dq.consistency),
+                    )
+                    if value is not None
+                ]
+                if dims:
+                    lines.append("Dimension breakdown: " + ", ".join(dims))
+
+            if effective.get("contributing_edges"):
+                lines.append(
+                    f"That effective score is lineage-adjusted from "
+                    f"{len(effective['contributing_edges'])} upstream source(s)."
+                )
+
+            answer = "\n".join(lines)
+
+        return {
+            "answer": answer,
+            "sources": [{"type": "dataset", "id": dataset.id, "label": label}],
+        }
+
+    # No specific dataset named - an org-wide quality summary: coverage
+    # (how many datasets have actually been profiled) plus the
+    # lowest-scoring handful, since those are what's most worth a
+    # rescan or a closer look.
+    profiled: list[tuple[Dataset, float]] = []
+    for d in datasets:
+        effective = compute_effective_quality(d.id, db)
+        score = effective.get("effective_score")
+        if score is not None:
+            profiled.append((d, score))
+
+    if not profiled:
+        return {
+            "answer": (
+                "None of your datasets have a data quality profile yet - run a scan to "
+                "get completeness/uniqueness/validity/freshness/consistency scores."
+            ),
+            "sources": [],
+        }
+
+    avg_score = round(sum(score for _, score in profiled) / len(profiled), 1)
+    profiled.sort(key=lambda pair: pair[1])
+    worst = profiled[:5]
+
+    answer = (
+        f"{len(profiled)} of {len(datasets)} dataset(s) have a quality profile. "
+        f"Average effective quality score: {avg_score}/100.\n"
+        "Lowest-scoring: "
+        + ", ".join(f"{d.schema_name}.{d.name} ({score}/100)" for d, score in worst)
+    )
+
+    return {
+        "answer": answer,
+        "sources": [
+            {"type": "dataset", "id": d.id, "label": f"{d.schema_name}.{d.name}"}
+            for d, _ in worst
+        ],
+    }
+
+
 def _answer_governance_question(
     db: Session,
     organization_id: str,
@@ -743,11 +927,18 @@ def _answer_question_core(
     if result is not None:
         return result
 
-    result = _answer_pii_question(datasets, normalized_query)
+    result = _answer_pii_question(datasets, data_sources, normalized_query)
     if result is not None:
         return result
 
     result = _answer_ownership_question(datasets, normalized_query)
+    if result is not None:
+        return result
+
+    # Checked before governance: "quality score"/"data quality" wording
+    # is about the profiled DataQuality/effective-quality numbers, a
+    # different metric than governance maturity - see QUALITY_KEYWORDS.
+    result = _answer_quality_question(db, datasets, normalized_query)
     if result is not None:
         return result
 
@@ -762,20 +953,20 @@ def _answer_question_core(
     return _answer_via_semantic_search(db, organization_id, query)
 
 
-# Keyword sets already defined above (PII_KEYWORDS, LINEAGE_KEYWORDS,
-# GOVERNANCE_KEYWORDS, CONTRACT_KEYWORDS) double as the signal for
-# "which angle has this conversation already covered" - re-scanning
-# the raw query text works uniformly whether the question was actually
+# Keyword sets already defined above double as the signal for "which
+# angle has this conversation already covered" - re-scanning the raw
+# query text works uniformly whether the question was actually
 # answered by a deterministic intent handler, the LLM path, or the
 # semantic-search fallback, rather than threading a category label
-# through every branch above individually. GOVERNANCE_KEYWORDS covers
-# both "governance"/maturity and "quality score" wording (it's in that
-# tuple already), so it suppresses both suggestion categories.
+# through every branch above individually. "quality" now maps to its
+# own QUALITY_KEYWORDS (previously aliased to GOVERNANCE_KEYWORDS,
+# which is what caused quality questions to be answered as governance
+# maturity in the first place - see _answer_quality_question above).
 _CATEGORY_KEYWORDS: tuple[tuple[str, tuple[str, ...]], ...] = (
     ("pii", PII_KEYWORDS),
     ("lineage", LINEAGE_KEYWORDS),
     ("governance", GOVERNANCE_KEYWORDS),
-    ("quality", GOVERNANCE_KEYWORDS),
+    ("quality", QUALITY_KEYWORDS),
     ("contract", CONTRACT_KEYWORDS),
     ("ownership", OWNERSHIP_KEYWORDS),
 )

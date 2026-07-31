@@ -408,7 +408,7 @@ export type UpstreamContractBreach = {
 };
 
 export type AskSource = {
-  type: "dataset" | "glossary_term";
+  type: "dataset" | "glossary_term" | "source";
   id: string;
   label: string;
 };

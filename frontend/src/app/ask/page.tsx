@@ -30,6 +30,9 @@ function sourceHref(source: AskSource) {
   if (source.type === "dataset") {
     return `/datasets/${source.id}`;
   }
+  if (source.type === "source") {
+    return `/ecosystem?sourceId=${source.id}`;
+  }
   return "/governance";
 }
 

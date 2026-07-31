@@ -247,6 +247,45 @@ class AssistantTests(unittest.TestCase):
         body = self._ask(headers, "how's our governance maturity?")
         self.assertIn("Governance maturity:", body["answer"])
 
+    def test_quality_intent_reports_score_not_governance_maturity(self):
+        # Regression test: "quality score" used to live in
+        # GOVERNANCE_KEYWORDS, so this question was silently answered
+        # with org-wide governance maturity instead of the dataset's
+        # actual profiled quality score.
+        headers = self._register_and_login(f"aq1{self._n}@a.com", f"Assistant Org QA1 {self._n}")
+        source_id = self._create_source(headers, f"SQ1{self._n}")
+        self._scan(headers, source_id, ORDERS_SCAN_RESULT)
+
+        body = self._ask(headers, "what's the quality score for orders?")
+        self.assertIn("quality score", body["answer"])
+        self.assertNotIn("Governance maturity:", body["answer"])
+
+    def test_quality_intent_org_wide_summary_when_no_dataset_named(self):
+        headers = self._register_and_login(f"aq2{self._n}@a.com", f"Assistant Org QA2 {self._n}")
+        source_id = self._create_source(headers, f"SQ2{self._n}")
+        self._scan(headers, source_id, ORDERS_SCAN_RESULT)
+
+        body = self._ask(headers, "how's our data quality looking?")
+        self.assertIn("quality profile", body["answer"])
+        self.assertNotIn("Governance maturity:", body["answer"])
+
+    def test_pii_intent_scoped_to_sources_lists_source_names(self):
+        # Regression test: "which sources have PII" used to fall
+        # through to the same dataset-level list as "which datasets
+        # have PII", ignoring that the question was scoped to systems.
+        headers = self._register_and_login(f"aq3{self._n}@a.com", f"Assistant Org QA3 {self._n}")
+        source_name = f"SalesforceCRM{self._n}"
+        source_id = self._create_source(headers, source_name)
+        self._scan(headers, source_id, SCAN_RESULT)
+
+        other_source_id = self._create_source(headers, f"CleanSource{self._n}")
+        self._scan(headers, other_source_id, ORDERS_SCAN_RESULT)
+
+        body = self._ask(headers, "which sources have PII?")
+        self.assertIn(source_name, body["answer"])
+        self.assertTrue(any(s["type"] == "source" for s in body["sources"]))
+        self.assertNotIn("CleanSource", body["answer"])
+
     def test_contract_intent_reports_no_contracts_initially(self):
         headers = self._register_and_login(f"a8{self._n}@a.com", f"Assistant Org 8 {self._n}")
         source_id = self._create_source(headers, f"S8{self._n}")
