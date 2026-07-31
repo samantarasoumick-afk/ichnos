@@ -67,7 +67,7 @@ describe("QueryLogPage", () => {
     expect(screen.getByText("33.3%")).toBeInTheDocument();
     expect(screen.getByText("who owns the mystery dataset?")).toBeInTheDocument();
     expect(screen.getByText("who owns customers?")).toBeInTheDocument();
-    expect(screen.getByText("Ask + Search")).toBeInTheDocument();
+    expect(screen.getByText("Ask'Fe' + Search")).toBeInTheDocument();
   });
 
   it("refetches with a new window when a day-range button is clicked", async () => {

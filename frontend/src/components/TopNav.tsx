@@ -154,7 +154,7 @@ export default function TopNav() {
         <NavDropdown label="Governance" items={GOVERNANCE_ITEMS} pathname={pathname} />
 
         <Link href="/ask" className={linkClasses("/ask")}>
-          Ask
+          Ask&apos;Fe&apos;
         </Link>
 
         <Link href="/discussions" className={linkClasses("/discussions")}>

@@ -191,7 +191,7 @@ export default function BillingPage() {
               </div>
             </div>
             <div className="rounded-lg bg-gray-50 p-4">
-              <div className="text-xs text-gray-500">Ask Questions / Day</div>
+              <div className="text-xs text-gray-500">Ask&apos;Fe&apos; Questions / Day</div>
               <div className="text-xl font-bold">
                 {status.entitlements.ask_daily_limit ?? "Unlimited"}
               </div>

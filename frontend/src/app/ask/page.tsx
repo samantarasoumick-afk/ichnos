@@ -80,13 +80,13 @@ export default function AskPage() {
       return `${speaker}: ${entry.text}${sourceLines}`;
     });
 
-    const header = `DatFe - Ask conversation\nExported ${new Date().toLocaleString()}\n\n`;
+    const header = `DatFe - Ask'Fe' conversation\nExported ${new Date().toLocaleString()}\n\n`;
     const blob = new Blob([header + lines.join("\n\n")], { type: "text/plain" });
     const url = URL.createObjectURL(blob);
 
     const link = document.createElement("a");
     link.href = url;
-    link.download = `datafe-ask-${new Date().toISOString().slice(0, 10)}.txt`;
+    link.download = `datafe-askfe-${new Date().toISOString().slice(0, 10)}.txt`;
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
@@ -173,9 +173,9 @@ export default function AskPage() {
 
       <div className="mb-8 flex items-start justify-between gap-4">
         <div>
-          <h1 className="text-4xl font-bold">Ask</h1>
+          <h1 className="text-4xl font-bold">Ask&apos;Fe&apos;</h1>
           <p className="mt-2 text-gray-600">
-            Ask questions about your catalog in plain English - ownership, sensitivity,
+            Ask&apos;Fe&apos; questions about your catalog in plain English - ownership, sensitivity,
             lineage, governance standing, and contract health are answered directly from
             your data.
           </p>
@@ -298,7 +298,7 @@ export default function AskPage() {
             disabled={asking || !question.trim()}
             className="rounded-lg bg-black px-4 py-2 text-sm text-white hover:bg-gray-800 disabled:opacity-50"
           >
-            Ask
+            Ask&apos;Fe&apos;
           </button>
         </div>
       </div>

@@ -120,8 +120,8 @@ export const TOUR_SCENARIOS: TourScenario[] = [
         id: "ask",
         title: "Or just ask, in plain English",
         narrative:
-          "Instead of posting in Slack and waiting forty minutes for an answer, the Ask " +
-          "assistant already knows who owns customers - grounded in the real catalog and " +
+          "Instead of posting in Slack and waiting forty minutes for an answer, Ask'Fe' " +
+          "already knows who owns customers - grounded in the real catalog and " +
           "lineage graph, not a canned FAQ.",
         target: { path: "/ask", query: { q: "Who owns customers?", autosubmit: "1" } },
       },
@@ -232,7 +232,7 @@ export const TOUR_SCENARIOS: TourScenario[] = [
         id: "ask",
         title: "Or just ask which contracts are breached",
         narrative:
-          "The Ask assistant surfaces every current contract breach on demand - this is the " +
+          "Ask'Fe' surfaces every current contract breach on demand - this is the " +
           "kind of question a data quality process should be able to answer in seconds, not " +
           "during a quarterly review.",
         target: { path: "/ask", query: { q: "Do we have any contract breaches?", autosubmit: "1" } },

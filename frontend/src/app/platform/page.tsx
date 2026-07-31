@@ -284,7 +284,7 @@ export default function PlatformAdminPage() {
                   <th className="py-3">Status</th>
                   <th className="py-3">Sources</th>
                   <th className="py-3">Seats</th>
-                  <th className="py-3">Ask Usage</th>
+                  <th className="py-3">Ask&apos;Fe&apos; Usage</th>
                   <th className="py-3">Demo Data</th>
                   <th className="py-3">Last Activity</th>
                   <th className="py-3 text-right">Actions</th>

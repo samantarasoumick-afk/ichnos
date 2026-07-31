@@ -312,7 +312,7 @@ def enforce_ask_limit(db: Session, current_user) -> None:
             status_code=429,
             detail=(
                 f"Your {entitlements.plan} plan includes "
-                f"{entitlements.ask_daily_limit} Ask questions per day, "
+                f"{entitlements.ask_daily_limit} Ask'Fe' questions per day, "
                 "and you've used all of them in the last 24 hours. "
                 "Upgrade your plan for a higher daily limit, or try "
                 "again tomorrow."

@@ -10,8 +10,8 @@ import type { QueryLogReport } from "../../types/metadata";
 const WINDOW_OPTIONS = [7, 30, 90];
 
 function sourceLabel(sources: string[]) {
-  if (sources.length === 2) return "Ask + Search";
-  if (sources[0] === "ask") return "Ask";
+  if (sources.length === 2) return "Ask'Fe' + Search";
+  if (sources[0] === "ask") return "Ask'Fe'";
   if (sources[0] === "search") return "Search";
   return sources.join(", ");
 }
@@ -69,7 +69,7 @@ export default function QueryLogPage() {
         <div>
           <h1 className="text-4xl font-bold">Search Insights</h1>
           <p className="mt-2 text-gray-600">
-            What people are asking on the Ask page and typing into search - and,
+            What people are asking on the Ask&apos;Fe&apos; page and typing into search - and,
             more usefully, what isn&apos;t landing. Recurring gaps here are good
             candidates for a new built-in intent, glossary term, or FAQ entry.
           </p>
