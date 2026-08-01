@@ -54,6 +54,7 @@ export default function DatasetPage() {
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [columnErrorMessage, setColumnErrorMessage] = useState<string | null>(null);
   const [summary, setSummary] = useState("");
+  const [downloadingExport, setDownloadingExport] = useState(false);
 
   const [scorecard, setScorecard] = useState<GovernanceScorecard | null>(null);
   const [dataQuality, setDataQuality] = useState<DataQuality | null>(null);
@@ -93,6 +94,36 @@ export default function DatasetPage() {
       ...prev,
       [column.id]: prev[column.id] ?? column.description ?? "",
     }));
+  }
+
+  // The only per-dataset download anywhere in the product before this
+  // was the org-wide compliance PDF - this is a metadata export (one
+  // row per column, dataset facts repeated on each row), not a raw
+  // data export, since DatFe catalogs a source's schema rather than
+  // warehousing the underlying rows. responseType: "blob" + an
+  // in-memory object URL is the same pattern the Ask'Fe' page's
+  // conversation download already uses.
+  async function downloadExport() {
+    if (!dataset) return;
+
+    setDownloadingExport(true);
+    try {
+      const response = await api.get(`/api/datasets/${dataset.id}/export`, { responseType: "blob" });
+      const blob = new Blob([response.data], { type: "text/csv" });
+      const url = URL.createObjectURL(blob);
+
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = `${dataset.schema_name}.${dataset.name}.csv`;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      URL.revokeObjectURL(url);
+    } catch (error) {
+      console.error(error);
+    } finally {
+      setDownloadingExport(false);
+    }
   }
 
   async function handleSaveColumnDescription(columnId: string) {
@@ -421,13 +452,25 @@ export default function DatasetPage() {
   const health = getOverallHealth(dataset);
   const healthStyle = HEALTH_STYLES[health.level];
 
+  // Split out so column-level lineage is an explicit, visible fact
+  // rather than folded silently into one combined number - previously
+  // "Lineage (5)" gave no indication whether any of those 5 edges were
+  // column-level, which was exactly the "it's there but you can't
+  // tell" gap column lineage had everywhere else in this page too.
+  const datasetLineageCount = dependencies.length + impact.length;
+  const columnLineageCount =
+    columnLineageUpstream.length + columnLineageDownstream.length;
+
   const tabs: { key: TabKey; label: string }[] = [
     { key: "overview", label: "Overview" },
     { key: "business", label: "Business View" },
     { key: "columns", label: `Columns (${columns.length})` },
     {
       key: "lineage",
-      label: `Lineage (${dependencies.length + impact.length + columnLineageUpstream.length + columnLineageDownstream.length})`,
+      label:
+        columnLineageCount > 0
+          ? `Lineage (${datasetLineageCount} · ${columnLineageCount} col)`
+          : `Lineage (${datasetLineageCount})`,
     },
     { key: "governance", label: "Governance" },
     { key: "discussion", label: "Discussion" },
@@ -446,15 +489,27 @@ export default function DatasetPage() {
             <div className="text-gray-600 mt-1">Owner: {dataset.owner}</div>
           </div>
 
-          <div className={`shrink-0 rounded-xl px-4 py-3 ${healthStyle.bg}`}>
-            <div className={`text-sm font-semibold ${healthStyle.text}`}>
-              {healthStyle.label}
-            </div>
-            {health.reasons.length > 0 && (
-              <div className={`text-xs mt-1 max-w-xs ${healthStyle.text}`}>
-                {health.reasons.join(", ")}
+          <div className="flex shrink-0 items-start gap-3">
+            <button
+              type="button"
+              onClick={downloadExport}
+              disabled={downloadingExport}
+              title="Download this dataset's column inventory as a CSV"
+              className="rounded-xl border bg-white px-4 py-3 text-sm font-medium text-gray-700 hover:bg-gray-50 disabled:opacity-50"
+            >
+              {downloadingExport ? "Preparing..." : "Download CSV"}
+            </button>
+
+            <div className={`rounded-xl px-4 py-3 ${healthStyle.bg}`}>
+              <div className={`text-sm font-semibold ${healthStyle.text}`}>
+                {healthStyle.label}
               </div>
-            )}
+              {health.reasons.length > 0 && (
+                <div className={`text-xs mt-1 max-w-xs ${healthStyle.text}`}>
+                  {health.reasons.join(", ")}
+                </div>
+              )}
+            </div>
           </div>
         </div>
 
@@ -668,12 +723,29 @@ export default function DatasetPage() {
                         </td>
                         <td className="py-3">{column.sensitivity_score || 0}</td>
                         <td className="py-3 text-right">
-                          <button
-                            onClick={() => toggleColumnExpanded(column)}
-                            className="text-xs text-gray-500 hover:text-black"
-                          >
-                            {isExpanded ? "Hide details" : "Show details"}
-                          </button>
+                          <div className="flex items-center justify-end gap-2">
+                            {(upstreamMappings.length + downstreamMappings.length) > 0 && (
+                              // Previously the only way to learn a column
+                              // had column-level lineage at all was to
+                              // expand its row and look - this makes it
+                              // visible across every row at a glance,
+                              // without expanding anything.
+                              <span
+                                title={`${upstreamMappings.length} upstream, ${downstreamMappings.length} downstream column mapping${
+                                  upstreamMappings.length + downstreamMappings.length === 1 ? "" : "s"
+                                }`}
+                                className="shrink-0 rounded-full bg-indigo-100 px-2 py-0.5 text-[10px] font-medium text-indigo-700"
+                              >
+                                {upstreamMappings.length + downstreamMappings.length} column lineage
+                              </span>
+                            )}
+                            <button
+                              onClick={() => toggleColumnExpanded(column)}
+                              className="text-xs text-gray-500 hover:text-black"
+                            >
+                              {isExpanded ? "Hide details" : "Show details"}
+                            </button>
+                          </div>
                         </td>
                       </tr>
 

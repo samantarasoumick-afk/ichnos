@@ -126,3 +126,16 @@ class BusinessGlossaryTermResponse(BaseModel):
 
     class Config:
         from_attributes = True
+
+
+class GlossaryBulkImportSkippedRow(BaseModel):
+    row: int
+    term: Optional[str] = None
+    reason: str
+
+
+class GlossaryBulkImportResponse(BaseModel):
+    created_count: int
+    skipped_count: int
+    created: list[BusinessGlossaryTermResponse]
+    skipped: list[GlossaryBulkImportSkippedRow]

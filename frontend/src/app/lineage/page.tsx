@@ -285,6 +285,7 @@ export default function LineagePage() {
         <LineageGraph
           datasets={datasets}
           lineage={lineage}
+          selectedDatasetId={selectedDatasetId}
         />
       )}
     </main>

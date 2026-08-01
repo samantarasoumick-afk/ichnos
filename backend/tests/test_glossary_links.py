@@ -83,6 +83,11 @@ class GlossaryLinkTests(unittest.TestCase):
         self.assertIsNone(body["column_id"])
         self.assertEqual(body["term"], term["term"])
         self.assertEqual(body["definition"], term["definition"])
+        # The bug this guards against: a dataset-level link used to
+        # come back with no way to tell which dataset it pointed at
+        # (the frontend fell back to literally rendering "dataset").
+        self.assertEqual(body["dataset_schema_name"], "public")
+        self.assertEqual(body["dataset_name"], "customers")
 
     def test_create_column_level_link(self):
         headers = self._register_and_login(f"gl2{self._n}@a.com", f"Glossary Org 2 {self._n}")
@@ -183,10 +188,12 @@ class GlossaryLinkTests(unittest.TestCase):
         r = self.client.get(f"/api/glossary-links/dataset/{dataset_id}", headers=headers)
         self.assertEqual(r.status_code, 200, r.text)
         self.assertEqual(len(r.json()), 1)
+        self.assertEqual(r.json()[0]["dataset_name"], "customers")
 
         r = self.client.get(f"/api/glossary-links/term/{term['id']}", headers=headers)
         self.assertEqual(r.status_code, 200, r.text)
         self.assertEqual(len(r.json()), 1)
+        self.assertEqual(r.json()[0]["dataset_schema_name"], "public")
 
     def test_delete_link(self):
         headers = self._register_and_login(f"gl8{self._n}@a.com", f"Glossary Org 8 {self._n}")

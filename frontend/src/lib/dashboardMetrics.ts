@@ -3,6 +3,7 @@ import type {
   GovernanceOverview,
   MaturityOverview,
   PrivacyOverview,
+  Source,
 } from "../types/metadata";
 
 // The full universe of metrics a user can put on their home dashboard.
@@ -16,6 +17,7 @@ import type {
 // a new fetch per metric.
 export type DashboardMetricContext = {
   datasets: Dataset[];
+  sources: Source[];
   governance: GovernanceOverview | null;
   maturity: MaturityOverview | null;
   privacy: PrivacyOverview | null;
@@ -68,6 +70,17 @@ export const DEFAULT_METRIC_IDS = [
   "operational_alerts",
 ];
 
+// What a brand-new user (no saved dashboard preference yet) sees,
+// out of the box - the 5 special quick-filter cards above, plus one
+// ordinary catalog metric rendered through the generic getValue/href
+// card path. Deliberately NOT folded into DEFAULT_METRIC_IDS itself:
+// that array is also used to *exclude* ids from the generic-card loop
+// in app/page.tsx (since each of those 5 already has its own bespoke
+// quick-filter button), so adding an id there without giving it a
+// matching bespoke block would make it vanish entirely rather than
+// render generically.
+export const INITIAL_SELECTED_METRIC_IDS = [...DEFAULT_METRIC_IDS, "total_sources"];
+
 export const METRIC_CATALOG: MetricDefinition[] = [
   {
     id: "total_datasets",
@@ -75,6 +88,14 @@ export const METRIC_CATALOG: MetricDefinition[] = [
     description: "Every dataset currently in the catalog.",
     group: "Catalog",
     getValue: ({ datasets }) => ({ display: datasets.length, tone: "neutral" }),
+  },
+  {
+    id: "total_sources",
+    label: "Sources Onboarded",
+    description: "Connected systems (databases, warehouses, files) currently in the catalog.",
+    group: "Catalog",
+    href: "/ecosystem",
+    getValue: ({ sources }) => ({ display: sources.length, tone: "neutral" }),
   },
   {
     id: "high_risk_datasets",

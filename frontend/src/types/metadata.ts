@@ -93,6 +93,8 @@ export type GlossaryTermLink = {
   term: string;
   definition: string;
   dataset_id: string;
+  dataset_schema_name?: string | null;
+  dataset_name?: string | null;
   column_id?: string | null;
   column_name?: string | null;
   created_at?: string;
@@ -283,6 +285,19 @@ export type BusinessGlossaryTermUpdate = {
   domain?: string;
   owner?: string;
   status?: string;
+};
+
+export type GlossaryBulkImportSkippedRow = {
+  row: number;
+  term?: string | null;
+  reason: string;
+};
+
+export type GlossaryBulkImportResponse = {
+  created_count: number;
+  skipped_count: number;
+  created: BusinessGlossaryTerm[];
+  skipped: GlossaryBulkImportSkippedRow[];
 };
 
 export type DataQuality = {

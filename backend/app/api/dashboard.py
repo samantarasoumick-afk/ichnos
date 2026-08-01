@@ -5,6 +5,7 @@ from sqlalchemy.orm import Session
 
 from app.db.session import get_db
 from app.models.dataset import Dataset
+from app.models.source import DataSource
 from app.models.user import User
 
 from app.auth.dependencies import get_current_user
@@ -28,6 +29,12 @@ def dashboard_overview(
     )
 
     total_datasets = len(datasets)
+
+    total_sources = (
+        db.query(DataSource)
+        .filter(DataSource.organization_id == current_user.organization_id)
+        .count()
+    )
 
     critical = len([
         d for d in datasets
@@ -56,6 +63,7 @@ def dashboard_overview(
 
     return {
         "total_datasets": total_datasets,
+        "total_sources": total_sources,
         "critical_datasets": critical,
         "stale_datasets": stale,
         "average_trust_score": avg_trust,

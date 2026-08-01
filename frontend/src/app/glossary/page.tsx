@@ -10,6 +10,7 @@ import type {
   BusinessGlossaryTerm,
   BusinessGlossaryTermCreate,
   BusinessGlossaryTermUpdate,
+  GlossaryBulkImportResponse,
   GlossaryTermLink,
 } from "../../types/metadata";
 
@@ -42,6 +43,16 @@ export default function GlossaryPage() {
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [linksByTerm, setLinksByTerm] = useState<Record<string, GlossaryTermLink[]>>({});
   const [linksLoading, setLinksLoading] = useState<string | null>(null);
+
+  // Bulk CSV import - the scoped, highest-value slice of a broader
+  // "bulk upload everything" ask: a compliance/governance team handing
+  // over a spreadsheet of 100+ term definitions shouldn't have to
+  // create each one through the single-term form above.
+  const [showBulkImport, setShowBulkImport] = useState(false);
+  const [bulkImportFile, setBulkImportFile] = useState<File | null>(null);
+  const [bulkImporting, setBulkImporting] = useState(false);
+  const [bulkImportError, setBulkImportError] = useState<string | null>(null);
+  const [bulkImportResult, setBulkImportResult] = useState<GlossaryBulkImportResponse | null>(null);
 
   useEffect(() => {
     if (!user) return;
@@ -89,6 +100,44 @@ export default function GlossaryPage() {
       setCreateError("Unable to create term. It may already exist.");
     } finally {
       setCreatingTerm(false);
+    }
+  }
+
+  async function handleBulkImport() {
+    if (!bulkImportFile) {
+      setBulkImportError("Choose a CSV file first.");
+      return;
+    }
+
+    setBulkImporting(true);
+    setBulkImportError(null);
+    setBulkImportResult(null);
+
+    try {
+      const formData = new FormData();
+      formData.append("file", bulkImportFile);
+
+      const response = await api.post<GlossaryBulkImportResponse>(
+        "/api/governance/glossary/bulk-import",
+        formData,
+        { headers: { "Content-Type": "multipart/form-data" } }
+      );
+
+      setBulkImportResult(response.data);
+      setBulkImportFile(null);
+
+      if (response.data.created.length > 0) {
+        setTerms((prev) =>
+          [...prev, ...response.data.created].sort((a, b) => a.term.localeCompare(b.term))
+        );
+      }
+    } catch (error) {
+      console.error(error);
+      const detail =
+        (error as { response?: { data?: { detail?: string } } })?.response?.data?.detail;
+      setBulkImportError(detail || "Unable to import this file.");
+    } finally {
+      setBulkImporting(false);
     }
   }
 
@@ -180,14 +229,83 @@ export default function GlossaryPage() {
           </div>
         </div>
         {canEditGlossary && (
-          <button
-            onClick={() => setShowNewTermForm((prev) => !prev)}
-            className="shrink-0 rounded-lg bg-black px-4 py-2 text-sm text-white hover:bg-gray-800"
-          >
-            {showNewTermForm ? "Cancel" : "New Term"}
-          </button>
+          <div className="flex shrink-0 items-center gap-2">
+            <button
+              onClick={() => {
+                setShowBulkImport((prev) => !prev);
+                setBulkImportError(null);
+                setBulkImportResult(null);
+              }}
+              className="rounded-lg border bg-white px-4 py-2 text-sm hover:bg-gray-50"
+            >
+              {showBulkImport ? "Cancel" : "Bulk Import"}
+            </button>
+            <button
+              onClick={() => setShowNewTermForm((prev) => !prev)}
+              className="rounded-lg bg-black px-4 py-2 text-sm text-white hover:bg-gray-800"
+            >
+              {showNewTermForm ? "Cancel" : "New Term"}
+            </button>
+          </div>
         )}
       </div>
+
+      {showBulkImport && (
+        <div className="mb-6 space-y-3 rounded-xl bg-white p-6 shadow">
+          <div>
+            <div className="text-sm font-semibold">Bulk import from CSV</div>
+            <p className="mt-1 text-xs text-gray-500">
+              Columns: <code className="rounded bg-gray-100 px-1">term</code>,{" "}
+              <code className="rounded bg-gray-100 px-1">definition</code> (required),{" "}
+              <code className="rounded bg-gray-100 px-1">domain</code>,{" "}
+              <code className="rounded bg-gray-100 px-1">owner</code>,{" "}
+              <code className="rounded bg-gray-100 px-1">status</code> (optional). A row
+              missing a required field, or naming a term that already exists, is skipped and
+              reported below - every other valid row still gets created.
+            </p>
+          </div>
+
+          <input
+            type="file"
+            accept=".csv,text/csv"
+            onChange={(event) => setBulkImportFile(event.target.files?.[0] ?? null)}
+            className="w-full rounded-lg border px-3 py-2 text-sm"
+          />
+
+          {bulkImportError && <div className="text-sm text-red-600">{bulkImportError}</div>}
+
+          {bulkImportResult && (
+            <div className="rounded-lg bg-gray-50 p-3 text-sm">
+              <div className="font-medium text-gray-800">
+                Created {bulkImportResult.created_count} term
+                {bulkImportResult.created_count === 1 ? "" : "s"}
+                {bulkImportResult.skipped_count > 0
+                  ? `, skipped ${bulkImportResult.skipped_count}`
+                  : ""}
+                .
+              </div>
+              {bulkImportResult.skipped.length > 0 && (
+                <ul className="mt-2 space-y-1 text-xs text-gray-600">
+                  {bulkImportResult.skipped.map((skipped, index) => (
+                    <li key={index}>
+                      Row {skipped.row}
+                      {skipped.term ? ` (${skipped.term})` : ""}: {skipped.reason}
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </div>
+          )}
+
+          <button
+            onClick={handleBulkImport}
+            disabled={bulkImporting || !bulkImportFile}
+            className="rounded-lg bg-black px-4 py-2 text-sm text-white hover:bg-gray-800 disabled:opacity-50"
+          >
+            {bulkImporting ? "Importing..." : "Import"}
+          </button>
+        </div>
+      )}
 
       {errorMessage && (
         <div className="mb-6 rounded border border-red-200 bg-red-50 p-4 text-red-700">
@@ -367,15 +485,32 @@ export default function GlossaryPage() {
 
                   {linksByTerm[term.id] && linksByTerm[term.id].length > 0 && (
                     <div className="flex flex-wrap gap-2">
-                      {linksByTerm[term.id].map((link) => (
-                        <Link
-                          key={link.id}
-                          href={`/datasets/${link.dataset_id}`}
-                          className="rounded-full bg-gray-100 px-3 py-1 text-xs text-gray-700 hover:bg-gray-200"
-                        >
-                          {link.column_name ? `${link.column_name}` : "dataset"}
-                        </Link>
-                      ))}
+                      {linksByTerm[term.id].map((link) => {
+                        // Was previously just the literal word "dataset"
+                        // for a dataset-level link (no way to tell which
+                        // dataset without opening it) - now shows the
+                        // actual schema.table, with .column appended for
+                        // a column-level link. Falls back to a generic
+                        // label only if the backend link somehow arrived
+                        // without a resolvable dataset name.
+                        const datasetLabel =
+                          link.dataset_schema_name && link.dataset_name
+                            ? `${link.dataset_schema_name}.${link.dataset_name}`
+                            : "dataset";
+                        const label = link.column_name
+                          ? `${datasetLabel}.${link.column_name}`
+                          : datasetLabel;
+
+                        return (
+                          <Link
+                            key={link.id}
+                            href={`/datasets/${link.dataset_id}`}
+                            className="rounded-full bg-gray-100 px-3 py-1 text-xs text-gray-700 hover:bg-gray-200"
+                          >
+                            {label}
+                          </Link>
+                        );
+                      })}
                     </div>
                   )}
                 </div>

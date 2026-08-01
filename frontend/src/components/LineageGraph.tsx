@@ -1,5 +1,6 @@
 "use client";
 
+import { useEffect, useRef } from "react";
 import { useRouter } from "next/navigation";
 
 import ReactFlow, {
@@ -9,6 +10,7 @@ import ReactFlow, {
   MiniMap,
   type Edge,
   type Node,
+  type ReactFlowInstance,
 } from "reactflow";
 
 import type {
@@ -19,6 +21,14 @@ import type {
 type Props = {
   datasets: Dataset[];
   lineage: Lineage[];
+  // The dataset the Impact Analysis search box currently has selected
+  // (?dataset=<id> or picked from the autocomplete above) - previously
+  // this graph had no idea a selection even existed, so every node
+  // rendered identically regardless of what the rest of the page was
+  // focused on. When set, that node gets a distinct highlight and the
+  // view re-centers/zooms on it instead of showing a generic full-graph
+  // fit with no indication of "you are here."
+  selectedDatasetId?: string;
 };
 
 function datasetLabel(dataset: Dataset) {
@@ -73,8 +83,10 @@ function computeDepths(nodeIds: string[], lineage: Lineage[]): Map<string, numbe
 export default function LineageGraph({
   datasets,
   lineage,
+  selectedDatasetId,
 }: Props) {
   const router = useRouter();
+  const reactFlowInstanceRef = useRef<ReactFlowInstance | null>(null);
 
   const datasetById = new Map(
     datasets.map((dataset) => [
@@ -107,6 +119,7 @@ export default function LineageGraph({
     countPerDepth.set(depth, rowIndex + 1);
 
     const style = SENSITIVITY_STYLE[dataset.sensitivity_score || "LOW"] || SENSITIVITY_STYLE.LOW;
+    const isSelected = !!selectedDatasetId && dataset.id === selectedDatasetId;
 
     return {
       id: dataset.id,
@@ -117,6 +130,11 @@ export default function LineageGraph({
       data: {
         label: (
           <div>
+            {isSelected && (
+              <div className="mb-1 inline-block rounded bg-black px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-wide text-white">
+                Currently viewing
+              </div>
+            )}
             <div className="font-semibold">
               {datasetLabel(dataset)}
             </div>
@@ -130,12 +148,14 @@ export default function LineageGraph({
         ),
       },
       style: {
-        border: `1.5px solid ${style.border}`,
+        border: isSelected ? "3px solid #000" : `1.5px solid ${style.border}`,
+        boxShadow: isSelected ? "0 0 0 4px rgba(0,0,0,0.12)" : undefined,
         background: style.background,
         borderRadius: 8,
         padding: 12,
         width: 220,
         cursor: "pointer",
+        zIndex: isSelected ? 10 : undefined,
       },
     };
   });
@@ -157,10 +177,40 @@ export default function LineageGraph({
       },
     }));
 
+  // Re-centers/zooms on the selected node whenever it changes - e.g.
+  // picking a different dataset from the Impact Analysis search box
+  // above without leaving this page. Previously the graph had no
+  // reaction to that at all: `fitView` only ever ran once, on mount,
+  // fit to the *whole* graph, with no way to tell which node (if any)
+  // the rest of the page was currently focused on. Falls back to
+  // re-fitting the whole graph when the selection is cleared or points
+  // at a node that isn't part of this lineage graph.
+  useEffect(() => {
+    const instance = reactFlowInstanceRef.current;
+    if (!instance) return;
+
+    if (selectedDatasetId && graphDatasets.some((dataset) => dataset.id === selectedDatasetId)) {
+      instance.fitView({ nodes: [{ id: selectedDatasetId }], duration: 500, padding: 1.5 });
+    } else {
+      instance.fitView({ duration: 500 });
+    }
+    // graphDatasets is rebuilt fresh every render (new array/object
+    // identities from the .filter/.map above) - depending on the
+    // underlying datasets/lineage props instead avoids re-running this
+    // on every render for no reason.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedDatasetId, datasets, lineage]);
+
   return (
     <div>
       <div className="mb-3 flex flex-wrap items-center gap-4 text-xs text-gray-500">
         <span>Left to right = upstream to downstream. Click a node to open the dataset.</span>
+        {selectedDatasetId && (
+          <span className="flex items-center gap-1">
+            <span className="inline-block h-3 w-3 rounded-sm border-2 border-black bg-white" />
+            Currently viewing
+          </span>
+        )}
         <span className="flex items-center gap-1">
           <span className="inline-block h-3 w-3 rounded-sm" style={{ background: "#f0fdf4", border: "1px solid #22c55e" }} />
           Low sensitivity
@@ -180,7 +230,18 @@ export default function LineageGraph({
           nodes={nodes}
           edges={edges}
           onNodeClick={(_event, node) => router.push(`/datasets/${node.id}`)}
-          fitView
+          onInit={(instance) => {
+            reactFlowInstanceRef.current = instance;
+            // Decide the *initial* fit here instead of also passing the
+            // `fitView` boolean prop, which would fit the whole graph
+            // first and then immediately jump-cut to the selected node -
+            // one animation, not two.
+            if (selectedDatasetId && graphDatasets.some((dataset) => dataset.id === selectedDatasetId)) {
+              instance.fitView({ nodes: [{ id: selectedDatasetId }], padding: 1.5 });
+            } else {
+              instance.fitView();
+            }
+          }}
         >
           <MiniMap />
           <Controls />

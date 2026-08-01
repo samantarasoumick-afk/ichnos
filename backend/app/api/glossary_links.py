@@ -26,7 +26,12 @@ router = APIRouter(
 )
 
 
-def _to_response(link: GlossaryTermLink, term: BusinessGlossaryTerm, column_name: str | None) -> GlossaryTermLinkResponse:
+def _to_response(
+    link: GlossaryTermLink,
+    term: BusinessGlossaryTerm,
+    column_name: str | None,
+    dataset: Dataset | None = None,
+) -> GlossaryTermLinkResponse:
 
     return GlossaryTermLinkResponse(
         id=link.id,
@@ -34,6 +39,8 @@ def _to_response(link: GlossaryTermLink, term: BusinessGlossaryTerm, column_name
         term=term.term,
         definition=term.definition,
         dataset_id=link.dataset_id,
+        dataset_schema_name=dataset.schema_name if dataset else None,
+        dataset_name=dataset.name if dataset else None,
         column_id=link.column_id,
         column_name=column_name,
         created_at=link.created_at,
@@ -43,8 +50,9 @@ def _to_response(link: GlossaryTermLink, term: BusinessGlossaryTerm, column_name
 def _query_with_term_and_column(db: Session):
 
     return (
-        db.query(GlossaryTermLink, BusinessGlossaryTerm, DatasetColumn)
+        db.query(GlossaryTermLink, BusinessGlossaryTerm, DatasetColumn, Dataset)
         .join(BusinessGlossaryTerm, GlossaryTermLink.term_id == BusinessGlossaryTerm.id)
+        .join(Dataset, GlossaryTermLink.dataset_id == Dataset.id)
         .outerjoin(DatasetColumn, GlossaryTermLink.column_id == DatasetColumn.id)
     )
 
@@ -160,7 +168,7 @@ def create_glossary_link(
 
     db.commit()
 
-    return _to_response(link, term, column_name)
+    return _to_response(link, term, column_name, dataset)
 
 
 @router.delete("/{link_id}")
@@ -230,8 +238,8 @@ def list_links_for_dataset(
     )
 
     return [
-        _to_response(link, term, column.name if column else None)
-        for link, term, column in rows
+        _to_response(link, term, column.name if column else None, ds)
+        for link, term, column, ds in rows
     ]
 
 
@@ -264,6 +272,6 @@ def list_links_for_term(
     )
 
     return [
-        _to_response(link, term_row, column.name if column else None)
-        for link, term_row, column in rows
+        _to_response(link, term_row, column.name if column else None, ds)
+        for link, term_row, column, ds in rows
     ]

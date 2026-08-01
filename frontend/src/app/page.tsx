@@ -23,6 +23,7 @@ import type {
 import { getOverallHealth, HEALTH_STYLES } from "../utils/datasetHealth";
 import {
   DEFAULT_METRIC_IDS,
+  INITIAL_SELECTED_METRIC_IDS,
   METRIC_BY_ID,
   METRIC_CATALOG,
   toneClasses,
@@ -62,11 +63,14 @@ export default function Home() {
 
   // Which KPI cards this user wants on their dashboard, out of
   // everything the platform computes (see lib/dashboardMetrics.ts).
-  // Starts as the original default 5 so existing users see no change
-  // until their saved preference (if any) loads in.
-  const [selectedMetricIds, setSelectedMetricIds] = useState<string[]>(DEFAULT_METRIC_IDS);
+  // Starts as INITIAL_SELECTED_METRIC_IDS (the original default 5 plus
+  // Sources Onboarded) so a brand-new user sees a source count without
+  // having to know to customize for it; existing users still see no
+  // change until their saved preference (if any) loads in and replaces
+  // this.
+  const [selectedMetricIds, setSelectedMetricIds] = useState<string[]>(INITIAL_SELECTED_METRIC_IDS);
   const [showMetricPicker, setShowMetricPicker] = useState(false);
-  const [pickerDraft, setPickerDraft] = useState<string[]>(DEFAULT_METRIC_IDS);
+  const [pickerDraft, setPickerDraft] = useState<string[]>(INITIAL_SELECTED_METRIC_IDS);
   const [savingMetrics, setSavingMetrics] = useState(false);
 
   // Deep-linkable from the guided tour (?q=payments) - read once,
@@ -220,7 +224,7 @@ export default function Home() {
 
   }, [user]);
 
-  const metricContext = { datasets, governance: governanceOverview, maturity: maturityOverview, privacy: privacyOverview };
+  const metricContext = { datasets, sources, governance: governanceOverview, maturity: maturityOverview, privacy: privacyOverview };
 
   async function saveMetricPreference() {
     setSavingMetrics(true);
@@ -1096,6 +1100,11 @@ export default function Home() {
 
                     {dataset.system_role && (
                       <span
+                        title={
+                          dataset.system_role === "SYSTEM_OF_RECORD"
+                            ? "System of Record - this is where the data is authoritatively created or corrected."
+                            : "System of Reference - a derived copy for reporting/lookup, not the place to correct the data."
+                        }
                         className={`text-xs px-2 py-0.5 rounded-full ${
                           dataset.system_role === "SYSTEM_OF_RECORD"
                             ? "bg-blue-100 text-blue-700"
