@@ -4,18 +4,25 @@ import {
   createContext,
   useCallback,
   useContext,
+  useEffect,
+  useRef,
   useState,
 } from "react";
 import { useRouter } from "next/navigation";
 
 import api from "../services/api";
-import { findScenario, TOUR_SCENARIOS, TourScenario, TourStep } from "../lib/tourScenarios";
+import { findScenario, storyToScenario, TOUR_SCENARIOS, TourScenario, TourStep } from "../lib/tourScenarios";
+import type { StoryResponse, StorySummary } from "../types/metadata";
 
 const STORAGE_KEY = "datafe_tour_state_v1";
 
 type StoredTourState = {
   scenarioId: string;
   stepIndex: number;
+  // Which lookup path resuming needs: a static scenario resolves
+  // synchronously via findScenario(); a custom (recorded) story needs
+  // an async GET /api/stories/{id} first - see the resume effect below.
+  isCustom: boolean;
 };
 
 type DatasetIndex = Record<string, string>;
@@ -32,7 +39,11 @@ function readStoredState(): StoredTourState | null {
     if (!raw) return null;
 
     const parsed = JSON.parse(raw) as StoredTourState;
-    if (!findScenario(parsed.scenarioId)) return null;
+
+    // Only static scenarios can be validated synchronously here - a
+    // custom story's existence (and org ownership) can only be
+    // confirmed by actually fetching it, which the resume effect does.
+    if (!parsed.isCustom && !findScenario(parsed.scenarioId)) return null;
 
     return parsed;
   } catch {
@@ -48,6 +59,31 @@ function writeStoredState(state: StoredTourState | null) {
   } else {
     window.localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
   }
+}
+
+/**
+ * Turns a story summary (all GET /api/stories returns - title/problem/
+ * step_count, deliberately no step detail) into a placeholder
+ * TourScenario whose `steps` array exists only so picker UI can read
+ * `.steps.length` for an accurate "N-step tour" count without fetching
+ * full step detail for every story just to list them. Real steps are
+ * only fetched (via startTour -> GET /api/stories/{id}) once someone
+ * actually starts playing it.
+ */
+function summaryToShellScenario(summary: StorySummary): TourScenario {
+  return {
+    id: summary.id,
+    title: summary.title,
+    problem: summary.problem ?? "",
+    solutionSummary: summary.solution_summary ?? "",
+    isCustom: true,
+    steps: Array.from({ length: summary.step_count }, (_, i) => ({
+      id: `shell-${i}`,
+      title: "",
+      narrative: "",
+      target: { path: "" },
+    })),
+  };
 }
 
 /**
@@ -68,9 +104,10 @@ function buildStepUrl(step: TourStep, datasetIndex: DatasetIndex): string | null
     const id = datasetIndex[datasetKey(dataset.schemaName, dataset.tableName)];
 
     // Not found - most likely the demo data isn't loaded (or was
-    // cleared) in this organization. Caller should treat this as
-    // "can't navigate to this step" rather than sending the user to a
-    // broken /datasets/undefined URL.
+    // cleared) in this organization, or (for a custom story) this org
+    // just doesn't have a same-named dataset. Caller should treat this
+    // as "can't navigate to this step" rather than sending the user to
+    // a broken /datasets/undefined URL.
     if (!id) return null;
 
     if (path === "/datasets/[id]") {
@@ -101,6 +138,12 @@ type TourContextValue = {
   next: () => void;
   back: () => void;
   exitTour: () => void;
+  // Custom (recorded) stories only - refetches the list (e.g. right
+  // after saving a new one) and removes one, respectively. No-ops
+  // that quietly do nothing useful if pointed at a built-in scenario
+  // id, since those don't exist server-side to delete.
+  refreshStories: () => Promise<void>;
+  deleteStory: (storyId: string) => Promise<void>;
 };
 
 const TourContext = createContext<TourContextValue | undefined>(undefined);
@@ -117,9 +160,69 @@ export function TourProvider({ children }: { children: React.ReactNode }) {
   // one-frame flash of "no tour active" on every page load.
   const [scenarioId, setScenarioId] = useState<string | null>(() => readStoredState()?.scenarioId ?? null);
   const [stepIndex, setStepIndex] = useState(() => readStoredState()?.stepIndex ?? 0);
+  // The fully resolved scenario currently playing, static or custom -
+  // for a static scenario this is available synchronously (see the
+  // initializer below); a custom one starts null and is filled in by
+  // the resume effect once its GET /api/stories/{id} fetch completes.
+  const [activeScenarioState, setActiveScenarioState] = useState<TourScenario | null>(() => {
+    const stored = readStoredState();
+    if (!stored || stored.isCustom) return null;
+    return findScenario(stored.scenarioId) ?? null;
+  });
+  const [customStories, setCustomStories] = useState<StorySummary[]>([]);
   const [datasetIndex, setDatasetIndex] = useState<DatasetIndex | null>(null);
   const [isResolving, setIsResolving] = useState(false);
   const [resolveError, setResolveError] = useState<string | null>(null);
+
+  const fetchCustomStories = useCallback(async () => {
+    try {
+      const response = await api.get<StorySummary[]>("/api/stories");
+      setCustomStories(response.data);
+    } catch {
+      // A logged-out or freshly-registered org with no stories yet -
+      // the picker just shows the two built-in scenarios in that case,
+      // same as before this feature existed.
+    }
+  }, []);
+
+  useEffect(() => {
+    // Deferred a tick, same reasoning as every other one-time mount
+    // effect in this app (see ecosystem/page.tsx's deep-link effect):
+    // this is a one-off fetch of external data, not something React
+    // should be synchronously re-rendering for mid-effect.
+    queueMicrotask(() => {
+      fetchCustomStories();
+    });
+  }, [fetchCustomStories]);
+
+  // One-time resume of an in-progress *custom* story after a reload -
+  // static scenarios are already resolved synchronously above, so this
+  // only has work to do when the stored state points at a custom one.
+  // Guarded the same way ecosystem/page.tsx's own ?sourceId= deep link
+  // is: a ref rather than a dependency array, so it fires exactly once
+  // per page load regardless of what re-renders afterward.
+  const ranCustomResumeRef = useRef(false);
+  useEffect(() => {
+    if (ranCustomResumeRef.current) return;
+    ranCustomResumeRef.current = true;
+
+    const stored = readStoredState();
+    if (!stored || !stored.isCustom) return;
+
+    queueMicrotask(async () => {
+      try {
+        const response = await api.get<StoryResponse>(`/api/stories/${stored.scenarioId}`);
+        setActiveScenarioState(storyToScenario(response.data));
+      } catch {
+        // Story was deleted, or belongs to a different org than
+        // whoever's session this now is - just drop the stale resume
+        // state instead of leaving the stepper stuck unresolved.
+        setScenarioId(null);
+        setStepIndex(0);
+        writeStoredState(null);
+      }
+    });
+  }, []);
 
   // force=true bypasses the cache - needed after ensureStepData() below
   // has just (possibly) created new datasets, since a memoized index
@@ -154,6 +257,8 @@ export function TourProvider({ children }: { children: React.ReactNode }) {
   // prerequisites) needs - see backend/app/services/guided_tour_service.py.
   // Safe to call every time a step is reached, including re-visiting
   // one via Back: each checkpoint no-ops if its data already exists.
+  // Only meaningful for the two built-in scenarios, which is why
+  // navigateToStep below skips calling this entirely for a custom story.
   const ensureStepData = useCallback(async (scenarioId: string, index: number): Promise<boolean> => {
     try {
       await api.post(`/api/demo/tour/${scenarioId}/step/${index}`);
@@ -175,10 +280,12 @@ export function TourProvider({ children }: { children: React.ReactNode }) {
       setIsResolving(true);
       setResolveError(null);
 
-      const created = await ensureStepData(scenario.id, index);
-      if (!created) {
-        setIsResolving(false);
-        return;
+      if (!scenario.isCustom) {
+        const created = await ensureStepData(scenario.id, index);
+        if (!created) {
+          setIsResolving(false);
+          return;
+        }
       }
 
       const index_ = await resolveDatasetIndex(true);
@@ -209,8 +316,11 @@ export function TourProvider({ children }: { children: React.ReactNode }) {
         }
       } else {
         setResolveError(
-          "Couldn't find this step's dataset - if you've cleared the demo data, reload it to " +
-            "continue the tour."
+          scenario.isCustom
+            ? "Couldn't find this step's dataset in your catalog - this story may reference data " +
+                "that doesn't exist here."
+            : "Couldn't find this step's dataset - if you've cleared the demo data, reload it to " +
+                "continue the tour."
         );
       }
     },
@@ -219,44 +329,69 @@ export function TourProvider({ children }: { children: React.ReactNode }) {
 
   const startTour = useCallback(
     async (id: string) => {
-      const scenario = findScenario(id);
-      if (!scenario) return;
+      const staticScenario = findScenario(id);
 
-      setScenarioId(id);
-      setStepIndex(0);
-      writeStoredState({ scenarioId: id, stepIndex: 0 });
+      if (staticScenario) {
+        setActiveScenarioState(staticScenario);
+        setScenarioId(id);
+        setStepIndex(0);
+        writeStoredState({ scenarioId: id, stepIndex: 0, isCustom: false });
+        await navigateToStep(staticScenario, 0);
+        return;
+      }
 
-      await navigateToStep(scenario, 0);
+      // Not a built-in scenario - fetch it as a custom story. Full step
+      // detail is only ever fetched here, at actual playback time, not
+      // when just listing stories in the picker.
+      setIsResolving(true);
+      setResolveError(null);
+
+      try {
+        const response = await api.get<StoryResponse>(`/api/stories/${id}`);
+        const scenario = storyToScenario(response.data);
+
+        setActiveScenarioState(scenario);
+        setScenarioId(id);
+        setStepIndex(0);
+        writeStoredState({ scenarioId: id, stepIndex: 0, isCustom: true });
+        setIsResolving(false);
+
+        await navigateToStep(scenario, 0);
+      } catch {
+        setIsResolving(false);
+        setResolveError("Couldn't load this story - it may have been deleted.");
+      }
     },
     [navigateToStep]
   );
 
   const goToStep = useCallback(
     (index: number) => {
-      const scenario = findScenario(scenarioId);
+      const scenario = activeScenarioState;
       if (!scenario || index < 0 || index >= scenario.steps.length) return;
 
       setStepIndex(index);
-      writeStoredState({ scenarioId: scenario.id, stepIndex: index });
+      writeStoredState({ scenarioId: scenario.id, stepIndex: index, isCustom: !!scenario.isCustom });
       navigateToStep(scenario, index);
     },
-    [scenarioId, navigateToStep]
+    [activeScenarioState, navigateToStep]
   );
 
   const next = useCallback(() => {
-    const scenario = findScenario(scenarioId);
+    const scenario = activeScenarioState;
     if (!scenario) return;
 
     if (stepIndex >= scenario.steps.length - 1) {
       // Last step - finishing the tour clears it rather than looping.
       setScenarioId(null);
+      setActiveScenarioState(null);
       setStepIndex(0);
       writeStoredState(null);
       return;
     }
 
     goToStep(stepIndex + 1);
-  }, [scenarioId, stepIndex, goToStep]);
+  }, [activeScenarioState, stepIndex, goToStep]);
 
   const back = useCallback(() => {
     goToStep(stepIndex - 1);
@@ -264,22 +399,48 @@ export function TourProvider({ children }: { children: React.ReactNode }) {
 
   const exitTour = useCallback(() => {
     setScenarioId(null);
+    setActiveScenarioState(null);
     setStepIndex(0);
     setResolveError(null);
     writeStoredState(null);
   }, []);
 
-  const activeScenario = findScenario(scenarioId) ?? null;
-  const currentStep = activeScenario ? activeScenario.steps[stepIndex] ?? null : null;
+  const deleteStory = useCallback(
+    async (storyId: string) => {
+      try {
+        await api.delete(`/api/stories/${storyId}`);
+        setCustomStories((prev) => prev.filter((story) => story.id !== storyId));
+
+        // Deleting the story currently being played (rare, but
+        // possible from another tab) ends it cleanly instead of
+        // leaving the stepper pointed at data that no longer exists.
+        if (scenarioId === storyId) {
+          exitTour();
+        }
+      } catch {
+        // Swallowed deliberately - the picker's delete affordance is a
+        // convenience; a failed delete just leaves the story in the
+        // list, which is a safe (if unhelpful) fallback state.
+      }
+    },
+    [scenarioId, exitTour]
+  );
+
+  const currentStep = activeScenarioState ? activeScenarioState.steps[stepIndex] ?? null : null;
+
+  const scenarios: TourScenario[] = [
+    ...TOUR_SCENARIOS,
+    ...customStories.map(summaryToShellScenario),
+  ];
 
   return (
     <TourContext.Provider
       value={{
-        scenarios: TOUR_SCENARIOS,
-        activeScenario,
+        scenarios,
+        activeScenario: activeScenarioState,
         stepIndex,
         currentStep,
-        totalSteps: activeScenario?.steps.length ?? 0,
+        totalSteps: activeScenarioState?.steps.length ?? 0,
         isResolving,
         resolveError,
         startTour,
@@ -287,6 +448,8 @@ export function TourProvider({ children }: { children: React.ReactNode }) {
         next,
         back,
         exitTour,
+        refreshStories: fetchCustomStories,
+        deleteStory,
       }}
     >
       {children}

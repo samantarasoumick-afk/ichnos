@@ -13,6 +13,8 @@
  * the seeder, or TourContext's resolution will skip that step.
  */
 
+import type { StoryResponse } from "../types/metadata";
+
 export type TourStepTarget = {
   /** Base app route to navigate to. */
   path: string;
@@ -46,6 +48,18 @@ export type TourScenario = {
   /** One-line summary of the resolution, shown on the picker card. */
   solutionSummary: string;
   steps: TourStep[];
+  /**
+   * True for a story built via the story recorder (see
+   * storyToScenario below) rather than one of the two scenarios
+   * hand-written in this file. TourContext uses this to skip
+   * ensureStepData - the per-step demo-data provisioning built for
+   * the two scenarios above - since a custom story's datasets are
+   * expected to already exist wherever it's played back; a missing
+   * one just surfaces the same "couldn't find this step's dataset"
+   * message buildStepUrl already produces, rather than trying to
+   * conjure one into existence.
+   */
+  isCustom?: boolean;
 };
 
 export const TOUR_SCENARIOS: TourScenario[] = [
@@ -244,4 +258,36 @@ export const TOUR_SCENARIOS: TourScenario[] = [
 export function findScenario(id: string | null): TourScenario | undefined {
   if (!id) return undefined;
   return TOUR_SCENARIOS.find((scenario) => scenario.id === id);
+}
+
+// Converts a persisted Story (fetched from GET /api/stories/{id}) into
+// the exact same shape the two hand-written scenarios above use, so
+// TourContext/TourStepper can play either back without knowing which
+// kind it's looking at. dataset_schema_name/dataset_table_name only
+// become a `target.dataset` when *both* are present - a step with just
+// one (shouldn't happen given how the recorder builds them, but a
+// story could in principle come from anywhere) is treated as a plain
+// path-only step rather than crashing on an incomplete ref.
+export function storyToScenario(story: StoryResponse): TourScenario {
+  return {
+    id: story.id,
+    title: story.title,
+    problem: story.problem ?? "",
+    solutionSummary: story.solution_summary ?? "",
+    isCustom: true,
+    steps: story.steps.map((step) => ({
+      id: step.id,
+      title: step.title,
+      narrative: step.narrative,
+      target: {
+        path: step.path,
+        dataset:
+          step.dataset_schema_name && step.dataset_table_name
+            ? { schemaName: step.dataset_schema_name, tableName: step.dataset_table_name }
+            : undefined,
+        tab: step.tab ?? undefined,
+        query: step.query_params ?? undefined,
+      },
+    })),
+  };
 }

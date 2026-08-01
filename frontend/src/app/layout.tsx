@@ -3,8 +3,10 @@ import "reactflow/dist/style.css";
 
 import type { Metadata } from "next";
 
+import StoryRecorderWidget from "../components/StoryRecorderWidget";
 import TourStepper from "../components/TourStepper";
 import { AuthProvider } from "../contexts/AuthContext";
+import { StoryRecorderProvider } from "../contexts/StoryRecorderContext";
 import { TourProvider } from "../contexts/TourContext";
 
 export const metadata: Metadata = {
@@ -22,8 +24,11 @@ export default function RootLayout({
       <body>
         <AuthProvider>
           <TourProvider>
-            {children}
-            <TourStepper />
+            <StoryRecorderProvider>
+              {children}
+              <TourStepper />
+              <StoryRecorderWidget />
+            </StoryRecorderProvider>
           </TourProvider>
         </AuthProvider>
       </body>

@@ -437,6 +437,63 @@ export type ThreadType = "QUESTION" | "PROPOSAL" | "ISSUE";
 
 export type ThreadStatus = "OPEN" | "RESOLVED";
 
+// Mirrors backend/app/schemas/story.py field-for-field - a
+// user-authored guided tour ("stitch your own story"), the dynamic
+// counterpart to the two hand-written scenarios in lib/tourScenarios.ts.
+export type StoryStepDatasetRef = {
+  schema_name: string;
+  table_name: string;
+};
+
+export type StoryStepCreate = {
+  title: string;
+  narrative: string;
+  path: string;
+  dataset?: StoryStepDatasetRef;
+  tab?: string;
+  query?: Record<string, string>;
+};
+
+export type StoryStepResponse = {
+  id: string;
+  order_index: number;
+  title: string;
+  narrative: string;
+  path: string;
+  dataset_schema_name?: string | null;
+  dataset_table_name?: string | null;
+  tab?: string | null;
+  query_params?: Record<string, string> | null;
+};
+
+export type StoryCreate = {
+  title: string;
+  problem?: string;
+  solution_summary?: string;
+  steps: StoryStepCreate[];
+};
+
+export type StorySummary = {
+  id: string;
+  title: string;
+  problem?: string | null;
+  solution_summary?: string | null;
+  step_count: number;
+  created_by_email?: string | null;
+  created_at?: string | null;
+};
+
+export type StoryResponse = {
+  id: string;
+  title: string;
+  problem?: string | null;
+  solution_summary?: string | null;
+  created_by_email?: string | null;
+  created_at?: string | null;
+  updated_at?: string | null;
+  steps: StoryStepResponse[];
+};
+
 export type GovernanceThreadReply = {
   id: string;
   thread_id: string;
