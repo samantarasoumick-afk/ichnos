@@ -8,6 +8,8 @@ class DatasetResponse(BaseModel):
 
     id: UUID
     source_id: Optional[UUID] = None
+    source_name: Optional[str] = None
+    source_type: Optional[str] = None
     name: str
     schema_name: str
 

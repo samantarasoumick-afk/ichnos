@@ -347,6 +347,100 @@ class DataContractsTests(unittest.TestCase):
         r = self.client.get("/api/datasets", headers=headers)
         self.assertEqual(r.json()[0]["contract_status"], "NO_CONTRACT")
 
+    # ---------------------------
+    # Dataset -> source visibility
+    # ---------------------------
+
+    def test_dataset_reports_its_source_name_and_type(self):
+        # Previously source_id was the only thing returned (an opaque
+        # FK) - the dataset detail page had no way to show which
+        # connected system a dataset actually came from without a
+        # second /api/sources lookup it never made.
+        email = f"c14{self._n}@a.com"
+        headers = self._register_and_login(email, f"Contracts Org 14 {self._n}")
+        source_id, dataset_id, _mock = self._create_scanned_dataset(headers)
+
+        r = self.client.get("/api/datasets", headers=headers)
+        dataset = r.json()[0]
+        self.assertEqual(dataset["source_id"], source_id)
+        self.assertEqual(dataset["source_name"], f"Source {self._n}")
+        self.assertEqual(dataset["source_type"], "postgresql")
+
+    # ---------------------------
+    # Contract evaluation history
+    # ---------------------------
+
+    @patch("app.api.scanner.get_scanner")
+    def test_history_records_create_activate_and_breach_in_order(self, mock_get_scanner):
+        # Uses the same in-method @patch pattern as
+        # test_rescan_that_drops_a_required_column_breaches_and_logs_audit
+        # above (rather than the _create_scanned_dataset helper, whose
+        # internal @patch context has already exited by the time this
+        # test calls the scanner a second time to trigger the breach).
+        email = f"c15{self._n}@a.com"
+        headers = self._register_and_login(email, f"Contracts Org 15 {self._n}")
+
+        mock_scan = MagicMock(return_value=SCAN_RESULT)
+        mock_get_scanner.return_value = mock_scan
+
+        r = self.client.post("/api/sources", headers=headers, json={
+            "name": f"Source {self._n}",
+            "type": "postgresql",
+            "connection_config": {"host": "x", "database": "y", "user": "z", "password": "p"},
+        })
+        source_id = r.json()["id"]
+
+        r = self.client.post(f"/api/scanner/{source_id}", headers=headers)
+        self.assertEqual(r.status_code, 200, r.text)
+        dataset_id = self.client.get("/api/datasets", headers=headers).json()[0]["id"]
+
+        r = self.client.post("/api/data-contracts", headers=headers, json=self._contract_payload(dataset_id))
+        contract_id = r.json()["id"]
+        self.client.post(f"/api/data-contracts/{contract_id}/activate", headers=headers)
+
+        mock_scan.return_value = SCAN_MISSING_PHONE
+        r = self.client.post(f"/api/scanner/{source_id}", headers=headers)
+        self.assertEqual(r.status_code, 200, r.text)
+
+        r = self.client.get(f"/api/data-contracts/dataset/{dataset_id}/history", headers=headers)
+        self.assertEqual(r.status_code, 200, r.text)
+        entries = r.json()
+
+        actions = [entry["action"] for entry in entries]
+        # Most-recent-first.
+        self.assertEqual(actions, ["contract.breach", "contract.activate", "contract.create"])
+
+        breach_entry, activate_entry, create_entry = entries
+
+        # All three carry the actor who triggered them here - create
+        # and activate are direct actions, and this rescan was itself
+        # triggered by an authenticated request, so the breach it
+        # tripped is attributed too (see dataset_ingestion_service.py's
+        # evaluate_contract call, which forwards current_user). A
+        # breach from an unattended/scheduled scan with no request
+        # context would come through with actor_email=None instead -
+        # the UI's "automated check" fallback covers that case.
+        self.assertEqual(create_entry["actor_email"], email)
+        self.assertEqual(activate_entry["actor_email"], email)
+        self.assertEqual(breach_entry["actor_email"], email)
+        self.assertIn("phone", breach_entry["details"])
+
+    def test_history_is_empty_for_dataset_with_no_contract_activity(self):
+        headers = self._register_and_login(f"c16{self._n}@a.com", f"Contracts Org 16 {self._n}")
+        _source_id, dataset_id, _mock = self._create_scanned_dataset(headers)
+
+        r = self.client.get(f"/api/data-contracts/dataset/{dataset_id}/history", headers=headers)
+        self.assertEqual(r.status_code, 200, r.text)
+        self.assertEqual(r.json(), [])
+
+    def test_history_for_dataset_in_other_org_returns_404(self):
+        headers_a = self._register_and_login(f"c17a{self._n}@a.com", f"Contracts Org 17a {self._n}")
+        headers_b = self._register_and_login(f"c17b{self._n}@a.com", f"Contracts Org 17b {self._n}")
+        _source_id, dataset_id, _mock = self._create_scanned_dataset(headers_a)
+
+        r = self.client.get(f"/api/data-contracts/dataset/{dataset_id}/history", headers=headers_b)
+        self.assertEqual(r.status_code, 404)
+
 
 if __name__ == "__main__":
     unittest.main()

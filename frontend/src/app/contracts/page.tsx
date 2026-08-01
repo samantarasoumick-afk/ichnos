@@ -1,13 +1,36 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useMemo, useState } from "react";
+import { Fragment, useEffect, useMemo, useState } from "react";
 
 import TopNav from "../../components/TopNav";
 import { useRequireAuth } from "../../hooks/useRequireAuth";
 import api from "../../services/api";
-import type { DataContract, Dataset } from "../../types/metadata";
+import type { ContractHistoryEntry, DataContract, Dataset } from "../../types/metadata";
 import { contractEvaluationBadgeClasses as evaluationBadgeClasses, contractStatusBadgeClasses as statusBadgeClasses } from "../../utils/badgeStyles";
+
+const HISTORY_ACTION_LABELS: Record<string, string> = {
+  "contract.create": "Created",
+  "contract.activate": "Activated",
+  "contract.deprecate": "Deprecated",
+  "contract.breach": "Breached",
+};
+
+function summarizeEnforcement(contract: DataContract): string {
+  const parts: string[] = [];
+
+  const columnCount = contract.schema_expectations.columns.length;
+  if (columnCount > 0) {
+    parts.push(`${columnCount} column${columnCount === 1 ? "" : "s"}`);
+  }
+
+  const minScore = contract.quality_thresholds?.min_overall_score;
+  if (minScore !== undefined && minScore !== null) {
+    parts.push(`min quality ≥ ${minScore}`);
+  }
+
+  return parts.length > 0 ? parts.join(" + ") : "–";
+}
 
 type StatusFilter = "ALL" | "ACTIVE" | "BREACHED" | "COMPLIANT" | "DRAFT" | "DEPRECATED";
 
@@ -31,6 +54,10 @@ export default function ContractsPage() {
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState<StatusFilter>("ALL");
   const [busyContractId, setBusyContractId] = useState<string | null>(null);
+
+  const [expandedContractId, setExpandedContractId] = useState<string | null>(null);
+  const [historyByDataset, setHistoryByDataset] = useState<Record<string, ContractHistoryEntry[]>>({});
+  const [historyLoading, setHistoryLoading] = useState<string | null>(null);
 
   const canEdit = effectiveRole === "admin" || effectiveRole === "steward" || effectiveRole === "data_owner";
 
@@ -125,6 +152,29 @@ export default function ContractsPage() {
     }
   }
 
+  async function toggleHistory(contractId: string, datasetId: string) {
+    if (expandedContractId === contractId) {
+      setExpandedContractId(null);
+      return;
+    }
+
+    setExpandedContractId(contractId);
+
+    if (!historyByDataset[datasetId]) {
+      setHistoryLoading(datasetId);
+      try {
+        const response = await api.get<ContractHistoryEntry[]>(
+          `/api/data-contracts/dataset/${datasetId}/history`
+        );
+        setHistoryByDataset((prev) => ({ ...prev, [datasetId]: response.data }));
+      } catch (error) {
+        console.error(error);
+      } finally {
+        setHistoryLoading(null);
+      }
+    }
+  }
+
   if (authLoading || !user) {
     return (
       <main className="min-h-screen bg-gray-100 p-10">
@@ -193,18 +243,21 @@ export default function ContractsPage() {
               <thead className="border-b bg-gray-50 text-xs uppercase text-gray-500">
                 <tr>
                   <th className="px-4 py-3">Dataset</th>
+                  <th className="px-4 py-3">Enforces</th>
                   <th className="px-4 py-3">Version</th>
                   <th className="px-4 py-3">Status</th>
                   <th className="px-4 py-3">Evaluation</th>
                   <th className="px-4 py-3">Owner</th>
                   <th className="px-4 py-3">Activated by</th>
                   <th className="px-4 py-3">Last evaluated</th>
+                  <th className="px-4 py-3">History</th>
                   {canEdit && <th className="px-4 py-3 text-right">Actions</th>}
                 </tr>
               </thead>
               <tbody>
                 {rows.map(({ contract, dataset }) => (
-                  <tr key={contract.id} className="border-b last:border-b-0 hover:bg-gray-50">
+                  <Fragment key={contract.id}>
+                  <tr className="border-b last:border-b-0 hover:bg-gray-50">
                     <td className="px-4 py-3">
                       {dataset ? (
                         <Link href={`/datasets/${dataset.id}`} className="font-medium text-gray-900 hover:underline">
@@ -214,6 +267,7 @@ export default function ContractsPage() {
                         <span className="text-gray-400">Unknown dataset</span>
                       )}
                     </td>
+                    <td className="px-4 py-3 text-gray-600">{summarizeEnforcement(contract)}</td>
                     <td className="px-4 py-3">v{contract.version}</td>
                     <td className="px-4 py-3">
                       <span className={`rounded-full px-2 py-0.5 text-xs font-medium ${statusBadgeClasses(contract.status)}`}>
@@ -246,6 +300,16 @@ export default function ContractsPage() {
                     <td className="px-4 py-3 text-gray-500">
                       {contract.last_evaluated_at ? new Date(contract.last_evaluated_at).toLocaleString() : "–"}
                     </td>
+                    <td className="px-4 py-3">
+                      <button
+                        type="button"
+                        onClick={() => dataset && toggleHistory(contract.id, dataset.id)}
+                        disabled={!dataset}
+                        className="text-xs font-medium text-gray-600 hover:text-black disabled:opacity-40"
+                      >
+                        {expandedContractId === contract.id ? "Hide" : "View"}
+                      </button>
+                    </td>
                     {canEdit && (
                       <td className="px-4 py-3 text-right">
                         {contract.status === "DRAFT" && (
@@ -269,11 +333,47 @@ export default function ContractsPage() {
                       </td>
                     )}
                   </tr>
+
+                  {expandedContractId === contract.id && dataset && (
+                    <tr className="border-b bg-gray-50">
+                      <td colSpan={canEdit ? 10 : 9} className="px-4 py-3">
+                        {historyLoading === dataset.id && (
+                          <div className="text-xs text-gray-500">Loading history...</div>
+                        )}
+                        {historyLoading !== dataset.id && (historyByDataset[dataset.id]?.length ?? 0) === 0 && (
+                          <div className="text-xs text-gray-500">No contract activity recorded yet.</div>
+                        )}
+                        {historyLoading !== dataset.id && (historyByDataset[dataset.id]?.length ?? 0) > 0 && (
+                          <ul className="space-y-1.5">
+                            {historyByDataset[dataset.id].map((entry, index) => (
+                              <li key={index} className="text-xs text-gray-600">
+                                <span
+                                  className={`font-semibold ${
+                                    entry.action === "contract.breach" ? "text-red-700" : "text-gray-800"
+                                  }`}
+                                >
+                                  {HISTORY_ACTION_LABELS[entry.action] || entry.action}
+                                </span>
+                                {" "}
+                                <span className="text-gray-400">{new Date(entry.created_at).toLocaleString()}</span>
+                                {entry.actor_email && <span> &middot; {entry.actor_email}</span>}
+                                {!entry.actor_email && entry.action === "contract.breach" && (
+                                  <span> &middot; automated check</span>
+                                )}
+                                {entry.details && <div className="mt-0.5 text-gray-500">{entry.details}</div>}
+                              </li>
+                            ))}
+                          </ul>
+                        )}
+                      </td>
+                    </tr>
+                  )}
+                  </Fragment>
                 ))}
 
                 {rows.length === 0 && (
                   <tr>
-                    <td colSpan={canEdit ? 8 : 7} className="px-4 py-8 text-center text-gray-500">
+                    <td colSpan={canEdit ? 10 : 9} className="px-4 py-8 text-center text-gray-500">
                       {contracts.length === 0
                         ? "No data contracts yet - create one from any dataset's detail page."
                         : "No contracts match this search/filter."}

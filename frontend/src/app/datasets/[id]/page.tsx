@@ -1,6 +1,7 @@
 "use client";
 
 import { Fragment, useEffect, useRef, useState } from "react";
+import Link from "next/link";
 import { useParams } from "next/navigation";
 
 import BusinessViewPanel from "../../../components/BusinessViewPanel";
@@ -486,7 +487,24 @@ export default function DatasetPage() {
             <h1 className="text-4xl font-bold">
               {dataset.schema_name}.{dataset.name}
             </h1>
-            <div className="text-gray-600 mt-1">Owner: {dataset.owner}</div>
+            <div className="flex flex-wrap items-center gap-x-3 text-gray-600 mt-1">
+              <span>Owner: {dataset.owner}</span>
+              {dataset.source_name && (
+                <>
+                  <span className="text-gray-300">&middot;</span>
+                  <span>
+                    Source:{" "}
+                    <Link
+                      href={`/ecosystem?sourceId=${dataset.source_id}`}
+                      className="font-medium text-gray-900 hover:underline"
+                    >
+                      {dataset.source_name}
+                    </Link>
+                    {dataset.source_type ? ` (${dataset.source_type})` : ""}
+                  </span>
+                </>
+              )}
+            </div>
           </div>
 
           <div className="flex shrink-0 items-start gap-3">

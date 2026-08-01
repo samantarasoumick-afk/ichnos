@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 
 import api from "../services/api";
-import type { ContractColumnExpectation, DataContract, UpstreamContractBreach } from "../types/metadata";
+import type { ContractColumnExpectation, ContractHistoryEntry, DataContract, UpstreamContractBreach } from "../types/metadata";
 import { contractEvaluationBadgeClasses as evaluationBadgeClasses, contractStatusBadgeClasses as statusBadgeClasses } from "../utils/badgeStyles";
 
 type Props = {
@@ -18,6 +18,13 @@ const EMPTY_ROW: ContractColumnExpectation = {
   required: true,
 };
 
+const HISTORY_ACTION_LABELS: Record<string, string> = {
+  "contract.create": "Created",
+  "contract.activate": "Activated",
+  "contract.deprecate": "Deprecated",
+  "contract.breach": "Breached",
+};
+
 export default function DataContractPanel({ datasetId, canEdit }: Props) {
   const [contracts, setContracts] = useState<DataContract[]>([]);
   const [loading, setLoading] = useState(true);
@@ -30,6 +37,9 @@ export default function DataContractPanel({ datasetId, canEdit }: Props) {
   const [saving, setSaving] = useState(false);
 
   const [upstreamBreaches, setUpstreamBreaches] = useState<UpstreamContractBreach[]>([]);
+
+  const [history, setHistory] = useState<ContractHistoryEntry[]>([]);
+  const [showHistory, setShowHistory] = useState(false);
 
   useEffect(() => {
     async function fetchContracts() {
@@ -58,9 +68,21 @@ export default function DataContractPanel({ datasetId, canEdit }: Props) {
       }
     }
 
+    async function fetchHistory() {
+      try {
+        const response = await api.get<ContractHistoryEntry[]>(
+          `/api/data-contracts/dataset/${datasetId}/history`
+        );
+        setHistory(response.data);
+      } catch (error) {
+        console.error(error);
+      }
+    }
+
     if (!datasetId) return;
     fetchContracts();
     fetchUpstreamBreaches();
+    fetchHistory();
   }, [datasetId]);
 
   function updateRow(index: number, field: keyof ContractColumnExpectation, value: string | boolean | undefined) {
@@ -271,6 +293,45 @@ export default function DataContractPanel({ datasetId, canEdit }: Props) {
               )}
             </div>
           ))}
+        </div>
+      )}
+
+      {history.length > 0 && (
+        <div className="mb-4 border-t pt-3">
+          <button
+            type="button"
+            onClick={() => setShowHistory((prev) => !prev)}
+            className="text-sm font-medium text-gray-700 hover:text-black"
+          >
+            {showHistory ? "Hide" : "Show"} evaluation history ({history.length})
+          </button>
+
+          {showHistory && (
+            <ul className="mt-3 space-y-2">
+              {history.map((entry, index) => (
+                <li key={index} className="text-xs text-gray-600 border-l-2 border-gray-200 pl-3">
+                  <div>
+                    <span
+                      className={`font-semibold ${
+                        entry.action === "contract.breach" ? "text-red-700" : "text-gray-800"
+                      }`}
+                    >
+                      {HISTORY_ACTION_LABELS[entry.action] || entry.action}
+                    </span>
+                    {" "}
+                    <span className="text-gray-400">
+                      {new Date(entry.created_at).toLocaleString()}
+                    </span>
+                    {entry.actor_email && <span> &middot; {entry.actor_email}</span>}
+                    {!entry.actor_email && entry.action === "contract.breach" && (
+                      <span> &middot; automated check</span>
+                    )}
+                  </div>
+                  {entry.details && <div className="mt-0.5 text-gray-500">{entry.details}</div>}
+                </li>
+              ))}
+            </ul>
+          )}
         </div>
       )}
 

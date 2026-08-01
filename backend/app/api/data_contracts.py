@@ -9,10 +9,12 @@ from sqlalchemy.orm import Session
 
 from app.db.session import get_db
 
+from app.models.audit_log import AuditLog
 from app.models.data_contract import DataContract
 from app.models.dataset import Dataset
 from app.models.user import User
 
+from app.schemas.data_contract import ContractHistoryEntry
 from app.schemas.data_contract import DataContractCreate
 from app.schemas.data_contract import DataContractResponse
 from app.schemas.data_contract import DataContractUpdate
@@ -139,6 +141,45 @@ def list_upstream_contract_breaches(
     dataset = get_dataset_or_404(dataset_id, db, current_user)
 
     return get_upstream_contract_breaches(db, dataset)
+
+
+@router.get(
+    "/dataset/{dataset_id}/history",
+    response_model=list[ContractHistoryEntry]
+)
+def list_contract_history(
+    dataset_id: str,
+    limit: int = 50,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """
+    The "who/when did what to this dataset's contract" trail -
+    create/activate/deprecate/breach - built entirely from AuditLog
+    rows that app.api.data_contracts and
+    app.services.data_contract_service.evaluate_contract already write
+    on every one of those events (all logged with resource_type=
+    "dataset", resource_id=dataset.id), rather than a new table. Spans
+    every contract version on this dataset, not just the current one -
+    a steward asking "how often has this been breached" cares about
+    the dataset's contract history as a whole, not one version's slice
+    of it.
+    """
+
+    dataset = get_dataset_or_404(dataset_id, db, current_user)
+
+    return (
+        db.query(AuditLog)
+        .filter(
+            AuditLog.organization_id == current_user.organization_id,
+            AuditLog.resource_type == "dataset",
+            AuditLog.resource_id == dataset.id,
+            AuditLog.action.like("contract.%"),
+        )
+        .order_by(AuditLog.created_at.desc())
+        .limit(limit)
+        .all()
+    )
 
 
 @router.post(

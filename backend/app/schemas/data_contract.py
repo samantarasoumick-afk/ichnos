@@ -63,6 +63,23 @@ class DataContractResponse(BaseModel):
         from_attributes = True
 
 
+class ContractHistoryEntry(BaseModel):
+    """
+    One audit-log row for this dataset's contract activity (create/
+    activate/deprecate/breach) - not a separate table, just the
+    existing AuditLog rows app.services.data_contract_service and
+    app.api.data_contracts already write on every one of those events,
+    filtered down and reordered for display. actor_email is None for
+    a "contract.breach" entry raised by an unattended rescan (no user
+    was driving it) rather than someone's direct action.
+    """
+
+    action: str
+    actor_email: Optional[str] = None
+    details: Optional[str] = None
+    created_at: datetime
+
+
 class UpstreamContractBreach(BaseModel):
     """
     One upstream dataset (reachable via lineage) whose ACTIVE contract

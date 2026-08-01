@@ -30,6 +30,8 @@ export type DataCategory = "MASTER" | "REFERENCE" | "TRANSACTIONAL" | "ANALYTICA
 export type Dataset = {
   id: string;
   source_id: string;
+  source_name?: string;
+  source_type?: string;
   name: string;
   schema_name: string;
   owner: string;
@@ -420,6 +422,16 @@ export type UpstreamContractBreach = {
   contract_id: string;
   contract_version: number;
   breach_details?: string | null;
+};
+
+// One audit-log-derived row for a dataset's contract history (create/
+// activate/deprecate/breach), spanning every version - see
+// GET /api/data-contracts/dataset/{id}/history.
+export type ContractHistoryEntry = {
+  action: string;
+  actor_email?: string | null;
+  details?: string | null;
+  created_at: string;
 };
 
 export type AskSource = {

@@ -96,6 +96,16 @@ class Dataset(Base):
     # "set once, editable later" precedent as owner/steward/domain.
     data_category = Column(String, nullable=True)
 
+    # One-directional on purpose - nothing currently needs
+    # DataSource.datasets as an ORM relationship (existing code queries
+    # Dataset filtered by source_id directly wherever it needs "every
+    # dataset under this source" - see ecosystem_service.py), so this
+    # only adds the direction actually needed: a dataset page showing
+    # which source it came from.
+    source = relationship(
+        "DataSource"
+    )
+
     columns = relationship(
         "DatasetColumn",
         back_populates="dataset"
@@ -159,6 +169,23 @@ class Dataset(Base):
             return "MEDIUM"
 
         return "LOW"
+
+    @property
+    def source_name(self):
+        """
+        The connected system this dataset was scanned/uploaded from -
+        previously not exposed anywhere on the dataset itself (only
+        source_id, an opaque FK), so the dataset detail page had no way
+        to show which source a dataset actually belongs to without a
+        second lookup the frontend never made.
+        """
+
+        return self.source.name if self.source else None
+
+    @property
+    def source_type(self):
+
+        return self.source.type if self.source else None
 
     @property
     def total_columns(self):
