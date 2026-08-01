@@ -44,6 +44,7 @@
     border-bottom:1px solid var(--line);
   }
   nav{
+    position:relative;
     display:flex; align-items:center; justify-content:space-between;
     padding:12px 24px; max-width:1180px; margin:0 auto;
   }
@@ -58,8 +59,14 @@
   .nav-links{display:flex; gap:32px; align-items:center;}
   .nav-links a{font-size:.95rem; font-weight:600; color:var(--muted); transition:color .2s;}
   .nav-links a:hover{color:var(--ink);}
+  .nav-links .mobile-only{display:none;}
   .nav-right{display:flex; align-items:center; gap:18px;}
   .login-link{font-size:.9rem; font-weight:700; color:var(--ink);}
+  .nav-toggle{
+    display:none; flex-direction:column; justify-content:center; gap:5px;
+    width:36px; height:36px; background:none; border:none; cursor:pointer; padding:8px;
+  }
+  .nav-toggle span{width:100%; height:2px; background:var(--ink); border-radius:2px;}
   .btn{
     display:inline-flex; align-items:center; gap:8px;
     padding:11px 22px; border-radius:999px; font-weight:700; font-size:.92rem;
@@ -241,8 +248,35 @@
     .steps{grid-template-columns:1fr;}
     .uc-grid{grid-template-columns:1fr;}
     .stats-grid{grid-template-columns:repeat(2,1fr); row-gap:32px;}
-    .nav-links{display:none;}
     .foot-grid{flex-direction:column;}
+
+    /* Collapse the in-page nav links into a toggled dropdown panel
+       instead of just hiding them outright - they used to vanish with
+       no replacement at all below this width, so a mobile visitor had
+       no quick way to jump to Pricing/Integrations/etc. "Log in" folds
+       in here too (as the .mobile-only entry below), so the persistent
+       top bar on a phone is just the logo, the toggle, and the single
+       "Start free" CTA - narrow enough to never wrap or overflow. */
+    .nav-toggle{display:flex;}
+    .login-link{display:none;}
+    .nav-links{
+      display:none;
+      position:absolute; top:100%; left:0; right:0;
+      flex-direction:column; align-items:stretch; gap:0;
+      background:#fff; border-bottom:1px solid var(--line);
+      box-shadow:0 12px 24px -12px rgba(20,18,31,.2);
+    }
+    .nav-links.open{display:flex;}
+    .nav-links a{padding:14px 24px; border-top:1px solid var(--line);}
+    .nav-links .mobile-only{display:block;}
+  }
+
+  @media(max-width:640px){
+    .grid-4{grid-template-columns:1fr;}
+    .pricing-grid{grid-template-columns:1fr;}
+    .hero{padding:70px 0 50px;}
+    .quote-card{padding:34px 22px;}
+    .cta{padding:50px 20px; margin:0 16px;}
   }
 </style>
 </head>
@@ -262,12 +296,16 @@
       </div>
       <span class="logo-word">DatFe</span>
     </div>
-    <div class="nav-links">
+    <div class="nav-links" id="navLinks">
       <a href="#features">Product</a>
       <a href="#usecases">Use Cases</a>
       <a href="#pricing">Pricing</a>
       <a href="#integrations">Integrations</a>
+      <a href="#" class="mobile-only" data-app-link="/login">Log in</a>
     </div>
+    <button type="button" class="nav-toggle" id="navToggle" aria-label="Menu" aria-expanded="false" aria-controls="navLinks">
+      <span></span><span></span><span></span>
+    </button>
     <div class="nav-right">
       <a href="#" class="login-link" data-app-link="/login">Log in</a>
       <a href="#" class="btn btn-primary" data-app-link="/register">Start free →</a>
@@ -595,6 +633,27 @@
   </div>
 </footer>
 
+<script>
+  (function () {
+    var navToggle = document.getElementById("navToggle");
+    var navLinks = document.getElementById("navLinks");
+    if (navToggle && navLinks) {
+      navToggle.addEventListener("click", function () {
+        var isOpen = navLinks.classList.toggle("open");
+        navToggle.setAttribute("aria-expanded", isOpen ? "true" : "false");
+      });
+      // Close the panel once a link is actually tapped, rather than
+      // leaving it open over whatever section/page the tap just
+      // navigated to.
+      navLinks.querySelectorAll("a").forEach(function (link) {
+        link.addEventListener("click", function () {
+          navLinks.classList.remove("open");
+          navToggle.setAttribute("aria-expanded", "false");
+        });
+      });
+    }
+  })();
+</script>
 <script>
   (function () {
     var host = window.location.hostname;

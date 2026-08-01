@@ -238,8 +238,8 @@ export default function ContractsPage() {
             </div>
           </div>
 
-          <div className="overflow-hidden rounded-xl bg-white shadow">
-            <table className="w-full text-left text-sm">
+          <div className="overflow-x-auto rounded-xl bg-white shadow">
+            <table className="w-full min-w-[900px] text-left text-sm">
               <thead className="border-b bg-gray-50 text-xs uppercase text-gray-500">
                 <tr>
                   <th className="px-4 py-3">Dataset</th>

@@ -224,7 +224,7 @@ export default function GlobalSearch() {
   const showResultsDropdown = !mention.state.open && open && query.trim().length > 0;
 
   return (
-    <div className="relative w-64" ref={containerRef}>
+    <div className="relative w-full lg:w-64" ref={containerRef}>
       <input
         ref={inputRef}
         type="text"
@@ -254,7 +254,7 @@ export default function GlobalSearch() {
       )}
 
       {showResultsDropdown && (
-        <div className="absolute left-0 top-full z-20 mt-1 w-96 max-h-96 overflow-y-auto rounded-lg border bg-white py-1 shadow-lg">
+        <div className="absolute left-0 top-full z-20 mt-1 w-96 max-w-[90vw] max-h-96 overflow-y-auto rounded-lg border bg-white py-1 shadow-lg">
           <SearchAnswerCard
             query={query.trim()}
             answer={answer}

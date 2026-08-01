@@ -26,7 +26,7 @@ export default function MentionDropdown({
 }: Props) {
   if (loading && suggestions.length === 0) {
     return (
-      <div className="absolute left-0 top-full z-30 mt-1 w-80 rounded-lg border bg-white py-1 shadow-lg">
+      <div className="absolute left-0 top-full z-30 mt-1 w-80 max-w-[90vw] rounded-lg border bg-white py-1 shadow-lg">
         <div className="px-4 py-3 text-sm text-gray-500">Loading...</div>
       </div>
     );
@@ -34,14 +34,14 @@ export default function MentionDropdown({
 
   if (suggestions.length === 0) {
     return (
-      <div className="absolute left-0 top-full z-30 mt-1 w-80 rounded-lg border bg-white py-1 shadow-lg">
+      <div className="absolute left-0 top-full z-30 mt-1 w-80 max-w-[90vw] rounded-lg border bg-white py-1 shadow-lg">
         <div className="px-4 py-3 text-sm text-gray-500">No matches.</div>
       </div>
     );
   }
 
   return (
-    <div className="absolute left-0 top-full z-30 mt-1 w-80 max-h-72 overflow-y-auto rounded-lg border bg-white py-1 shadow-lg">
+    <div className="absolute left-0 top-full z-30 mt-1 w-80 max-w-[90vw] max-h-72 overflow-y-auto rounded-lg border bg-white py-1 shadow-lg">
       {suggestions.map((item, index) => (
         <button
           key={`${item.type}-${item.id}`}

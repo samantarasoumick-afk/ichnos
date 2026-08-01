@@ -159,6 +159,7 @@ export default function ReferenceDataPage() {
                   )}
 
                   {columns && columns.length > 0 && (
+                    <div className="overflow-x-auto">
                     <table className="w-full text-sm">
                       <thead>
                         <tr className="border-b text-left text-gray-500">
@@ -179,6 +180,7 @@ export default function ReferenceDataPage() {
                         ))}
                       </tbody>
                     </table>
+                    </div>
                   )}
                 </div>
               )}

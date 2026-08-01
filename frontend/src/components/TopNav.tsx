@@ -120,11 +120,106 @@ function NavDropdown({
 export default function TopNav() {
   const { user, logout, effectiveRole, isPreviewing, setPreviewRole } = useAuth();
   const pathname = usePathname() ?? "";
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+
+  // Below lg, the primary nav-links row (2 dropdowns + Ask'Fe' +
+  // Discussions + Admin + maybe Platform) has no room to sit inline
+  // next to the logo, search, and account info - it used to just
+  // overflow the bar with no mobile menu at all. Closing this on every
+  // navigation (rather than leaving it open) matches the same pattern
+  // used for the website's mobile nav toggle. Adjusted during render
+  // (React's documented pattern for "reset state when a prop changes")
+  // rather than in an effect, so it takes effect on the very render
+  // the route changes instead of one tick later.
+  const [lastPathname, setLastPathname] = useState(pathname);
+  if (pathname !== lastPathname) {
+    setLastPathname(pathname);
+    setMobileMenuOpen(false);
+  }
 
   function linkClasses(href: string) {
     const active = pathname.startsWith(href);
     return `text-sm hover:text-black ${active ? "font-semibold text-black" : "text-gray-600"}`;
   }
+
+  const navLinks = (
+    <>
+      <NavDropdown label="Catalog" items={CATALOG_ITEMS} pathname={pathname} />
+
+      <NavDropdown label="Governance" items={GOVERNANCE_ITEMS} pathname={pathname} />
+
+      <Link href="/ask" className={linkClasses("/ask")}>
+        Ask&apos;Fe&apos;
+      </Link>
+
+      <Link href="/discussions" className={linkClasses("/discussions")}>
+        Discussions
+      </Link>
+
+      <NavDropdown
+        label="Admin"
+        items={effectiveRole === "admin" ? [...ADMIN_ITEMS, ...ADMIN_ONLY_ITEMS] : ADMIN_ITEMS}
+        pathname={pathname}
+      />
+
+      {/* DatFe's own operator role (see CurrentUser.is_platform_admin's
+          comment) - completely separate from the org-scoped Admin
+          dropdown above, so it's a distinct link rather than folded
+          into it. */}
+      {user?.is_platform_admin && (
+        <Link
+          href="/platform"
+          className={`${linkClasses("/platform")} rounded-full bg-[#0F172A] px-2.5 py-1 !text-white`}
+        >
+          Platform
+        </Link>
+      )}
+    </>
+  );
+
+  const accountInfo = user && (
+    <div className="flex flex-wrap items-center gap-3 text-sm text-gray-600">
+      <span>
+        {user.organization_name} &middot; {user.email}
+      </span>
+
+      {user.role === "admin" && (
+        <select
+          value={effectiveRole ?? "admin"}
+          onChange={(event) => {
+            const next = event.target.value as UserRole;
+            setPreviewRole(next === "admin" ? null : next);
+          }}
+          title="Preview the app as a different role - your real Admin account and permissions are unchanged."
+          className={`rounded-lg border px-2 py-1 text-xs ${
+            isPreviewing ? "border-amber-400 bg-amber-50 text-amber-800" : "text-gray-600"
+          }`}
+        >
+          {PREVIEW_ROLE_OPTIONS.map((option) => (
+            <option key={option.value} value={option.value}>
+              {option.label}
+            </option>
+          ))}
+        </select>
+      )}
+
+      <span
+        className={`rounded-full px-2 py-0.5 text-xs uppercase ${
+          isPreviewing ? "bg-amber-100 text-amber-800" : "bg-gray-100 text-gray-700"
+        }`}
+      >
+        {(effectiveRole ?? user.role).replace("_", " ")}
+        {isPreviewing ? " · preview" : ""}
+      </span>
+
+      <button
+        onClick={logout}
+        className="rounded-lg border px-3 py-1.5 text-sm hover:bg-gray-50"
+      >
+        Log out
+      </button>
+    </div>
+  );
 
   return (
     <>
@@ -143,87 +238,42 @@ export default function TopNav() {
         </button>
       </div>
     )}
-    <div className="mb-6 flex flex-wrap items-center justify-between gap-3 rounded-xl bg-white px-5 py-3 shadow">
-      <div className="flex items-center gap-5">
-        <Link href="/">
-          <DatFeLogo size={32} />
-        </Link>
-
-        <NavDropdown label="Catalog" items={CATALOG_ITEMS} pathname={pathname} />
-
-        <NavDropdown label="Governance" items={GOVERNANCE_ITEMS} pathname={pathname} />
-
-        <Link href="/ask" className={linkClasses("/ask")}>
-          Ask&apos;Fe&apos;
-        </Link>
-
-        <Link href="/discussions" className={linkClasses("/discussions")}>
-          Discussions
-        </Link>
-
-        <NavDropdown
-          label="Admin"
-          items={effectiveRole === "admin" ? [...ADMIN_ITEMS, ...ADMIN_ONLY_ITEMS] : ADMIN_ITEMS}
-          pathname={pathname}
-        />
-
-        {/* DatFe's own operator role (see CurrentUser.is_platform_admin's
-            comment) - completely separate from the org-scoped Admin
-            dropdown above, so it's a distinct link rather than folded
-            into it. */}
-        {user?.is_platform_admin && (
-          <Link
-            href="/platform"
-            className={`${linkClasses("/platform")} rounded-full bg-[#0F172A] px-2.5 py-1 !text-white`}
-          >
-            Platform
+    <div className="mb-6 rounded-xl bg-white px-5 py-3 shadow">
+      <div className="flex items-center justify-between gap-3">
+        <div className="flex items-center gap-5">
+          <Link href="/">
+            <DatFeLogo size={32} />
           </Link>
+
+          <div className="hidden items-center gap-5 lg:flex">{navLinks}</div>
+        </div>
+
+        {user && (
+          <div className="hidden lg:block">
+            <GlobalSearch />
+          </div>
         )}
+
+        <div className="hidden lg:block">{accountInfo}</div>
+
+        <button
+          type="button"
+          onClick={() => setMobileMenuOpen((prev) => !prev)}
+          aria-label="Menu"
+          aria-expanded={mobileMenuOpen}
+          className="flex shrink-0 flex-col justify-center gap-1.5 rounded-lg p-2 hover:bg-gray-50 lg:hidden"
+        >
+          <span className="block h-0.5 w-6 rounded bg-gray-900" />
+          <span className="block h-0.5 w-6 rounded bg-gray-900" />
+          <span className="block h-0.5 w-6 rounded bg-gray-900" />
+        </button>
       </div>
 
-      {user && <GlobalSearch />}
-
-      {user && (
-        <div className="flex items-center gap-3 text-sm text-gray-600">
-          <span>
-            {user.organization_name} &middot; {user.email}
-          </span>
-
-          {user.role === "admin" && (
-            <select
-              value={effectiveRole ?? "admin"}
-              onChange={(event) => {
-                const next = event.target.value as UserRole;
-                setPreviewRole(next === "admin" ? null : next);
-              }}
-              title="Preview the app as a different role - your real Admin account and permissions are unchanged."
-              className={`rounded-lg border px-2 py-1 text-xs ${
-                isPreviewing ? "border-amber-400 bg-amber-50 text-amber-800" : "text-gray-600"
-              }`}
-            >
-              {PREVIEW_ROLE_OPTIONS.map((option) => (
-                <option key={option.value} value={option.value}>
-                  {option.label}
-                </option>
-              ))}
-            </select>
-          )}
-
-          <span
-            className={`rounded-full px-2 py-0.5 text-xs uppercase ${
-              isPreviewing ? "bg-amber-100 text-amber-800" : "bg-gray-100 text-gray-700"
-            }`}
-          >
-            {(effectiveRole ?? user.role).replace("_", " ")}
-            {isPreviewing ? " · preview" : ""}
-          </span>
-
-          <button
-            onClick={logout}
-            className="rounded-lg border px-3 py-1.5 text-sm hover:bg-gray-50"
-          >
-            Log out
-          </button>
+      {mobileMenuOpen && (
+        <div className="mt-4 flex flex-col gap-4 border-t pt-4 lg:hidden">
+          <div className="flex flex-col gap-3">{navLinks}</div>
+          {user && <GlobalSearch />}
+          {accountInfo}
         </div>
       )}
     </div>
