@@ -50,7 +50,7 @@ export default function RegisterPage() {
     <main className="min-h-screen flex items-center justify-center bg-gray-100 p-6">
       <div className="w-full max-w-sm bg-white rounded-xl shadow p-8">
         <div className="mb-1">
-          <DatFeLogo size={30} textClassName="text-2xl font-bold" />
+          <DatFeLogo size={36} textClassName="text-2xl font-bold" />
         </div>
         <p className="text-sm text-gray-500 mb-1">Create your organization</p>
         <p className="text-sm text-gray-500 mb-6">

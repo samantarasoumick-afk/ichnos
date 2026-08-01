@@ -58,7 +58,7 @@ function GithubCallbackInner() {
     <main className="min-h-screen flex items-center justify-center bg-gray-100 p-6">
       <div className="w-full max-w-sm bg-white rounded-xl shadow p-8 text-center">
         <div className="mb-4 flex justify-center">
-          <DatFeLogo size={30} textClassName="text-2xl font-bold" />
+          <DatFeLogo size={36} textClassName="text-2xl font-bold" />
         </div>
 
         {status === "verifying" ? (

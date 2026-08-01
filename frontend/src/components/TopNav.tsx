@@ -146,7 +146,7 @@ export default function TopNav() {
     <div className="mb-6 flex flex-wrap items-center justify-between gap-3 rounded-xl bg-white px-5 py-3 shadow">
       <div className="flex items-center gap-5">
         <Link href="/">
-          <DatFeLogo size={26} />
+          <DatFeLogo size={32} />
         </Link>
 
         <NavDropdown label="Catalog" items={CATALOG_ITEMS} pathname={pathname} />
