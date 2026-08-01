@@ -1,4 +1,5 @@
 import hashlib
+import logging
 import os
 import re
 import secrets
@@ -39,6 +40,7 @@ from app.auth.dependencies import get_current_user
 from app.services import oauth_service
 from app.services import marketing_service
 from app.services.audit_service import log_audit_event
+from app.services.demo_data_service import seed_demo_data
 from app.services.email_service import send_email
 
 
@@ -46,6 +48,49 @@ router = APIRouter(
     prefix="/api/auth",
     tags=["auth"]
 )
+
+logger = logging.getLogger("datafe.auth")
+
+# Every brand-new organization - whichever signup path created it -
+# starts with the full connected demo estate already loaded by
+# default (see demo_data_service.py), so a first-time admin lands on
+# a catalog with something to explore immediately instead of an empty
+# state. They can clear it themselves whenever they're ready to
+# connect real sources (DemoDataPanel's "Clear Demo Data" button,
+# already wired to POST /api/demo/clear) - this only changes the
+# default at signup, not that flow.
+#
+# Gated behind an env var (default on) rather than unconditional, so
+# the test suite - which registers hundreds of throwaway orgs across
+# unrelated test files, most of them written against a genuinely
+# empty starting catalog - isn't forced to seed and tear down a full
+# 6-source/19-dataset estate on every single one. tests/conftest.py
+# turns this off for the whole test session; test_auto_seed.py is the
+# one place that flips it back on to actually exercise the feature.
+AUTO_SEED_DEMO_DATA_ON_SIGNUP = "AUTO_SEED_DEMO_DATA_ON_SIGNUP"
+
+
+def _seed_demo_data_for_new_org(db: Session, new_user: User) -> None:
+    """
+    Called only after the caller has already committed the real
+    registration. Any failure here is logged and swallowed rather than
+    raised: a bug in demo seeding should never block a real person
+    from registering, and should never threaten the registration that
+    already succeeded - worst case, the org just starts empty, same as
+    before this existed.
+    """
+
+    if os.getenv(AUTO_SEED_DEMO_DATA_ON_SIGNUP, "true").lower() != "true":
+        return
+
+    try:
+        seed_demo_data(db, new_user)
+    except Exception:
+        db.rollback()
+        logger.exception(
+            "Failed to auto-seed demo data for new organization %s",
+            new_user.organization_id,
+        )
 
 # Where the frontend actually lives, for building the link in the
 # magic-link email. Defaults to local dev; self-hosted setups should
@@ -171,7 +216,14 @@ def register_user(
         db, user.anon_id, organization.id, new_user.id
     )
 
+    # Committed before seeding demo data on purpose: seed_demo_data()
+    # does its own commit internally, and if it fails partway through
+    # and we have to roll back (see _seed_demo_data_for_new_org), that
+    # rollback must only ever undo the seeder's own half-finished work
+    # - never the registration itself.
     db.commit()
+
+    _seed_demo_data_for_new_org(db, new_user)
 
     return {
         "message": "User registered successfully",
@@ -522,6 +574,13 @@ def github_oauth_callback(
         actor_email=user.email,
     )
     db.commit()
+
+    # Same auto-seed as the password registration path, and only for
+    # the branch above that actually created a brand-new organization
+    # - an existing user just logging in via GitHub for the first time
+    # already has whatever demo/real data their organization has.
+    if audit_action == "user.github_register":
+        _seed_demo_data_for_new_org(db, user)
 
     response = JSONResponse({
         "access_token": token,

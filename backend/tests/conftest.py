@@ -24,6 +24,15 @@ os.environ.setdefault("ENCRYPTION_KEY", Fernet.generate_key().decode())
 os.environ.setdefault("CORS_ALLOWED_ORIGINS", "http://localhost:3000")
 os.environ.setdefault("AUTO_CREATE_SCHEMA", "false")
 os.environ.setdefault("DEMO_SEED", "false")
+# Registration auto-seeds a full demo estate by default (see
+# app/api/auth.py's AUTO_SEED_DEMO_DATA_ON_SIGNUP) so a first-time
+# admin lands on a catalog with something to explore. Almost every
+# test file in this suite registers throwaway organizations and
+# expects a genuinely empty starting catalog, so the whole session
+# runs with that default switched off - test_auto_seed.py is the one
+# place that flips it back on (via patch.dict) to exercise the
+# feature itself.
+os.environ.setdefault("AUTO_SEED_DEMO_DATA_ON_SIGNUP", "false")
 # The general API rate limiter is IP-keyed and in-memory; the whole
 # suite runs from a single TestClient "IP" and easily exceeds any
 # reasonable per-minute limit well before it exceeds anything a real

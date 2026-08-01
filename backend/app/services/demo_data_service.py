@@ -219,7 +219,28 @@ def _team_member(db: Session, organization_id: str, email: str, role: str) -> Us
     nobody is meant to keep using it - see the docstring on
     clear_demo_data for why these are deactivated, not deleted, on
     clear.
+
+    Re-seeding the same organization after a clear reuses that
+    deactivated row by email instead of inserting a duplicate - each
+    email is org_slug-suffixed (see call sites below) so it's stable
+    across seed/clear/re-seed cycles for one org, and without this a
+    second seed would hit a UNIQUE constraint on users.email rather
+    than standing the same demo team back up.
     """
+
+    existing = (
+        db.query(User)
+        .filter(User.email == email, User.organization_id == organization_id)
+        .first()
+    )
+
+    if existing is not None:
+        existing.role = role
+        existing.is_active = True
+        existing.is_seed_data = True
+        existing.password_hash = hash_password("password123")
+        db.flush()
+        return existing
 
     member = User(
         email=email,
