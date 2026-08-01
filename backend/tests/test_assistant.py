@@ -505,6 +505,69 @@ class AssistantTests(unittest.TestCase):
         body = self._ask(headers, "are there any contract breaches?")
         self.assertIn("breached contract", body["answer"])
 
+    def test_trust_intent_reports_score_for_named_dataset(self):
+        # Previously "trust score" had no dedicated handler at all and
+        # fell through to the semantic-search fallback, which can't
+        # find it either since Dataset.trust_score wasn't indexed as
+        # searchable text (see test_dataset_attribute_search.py).
+        headers = self._register_and_login(f"at1{self._n}@a.com", f"Assistant Org T1 {self._n}")
+        source_id = self._create_source(headers, f"ST1{self._n}")
+        self._scan(headers, source_id, ORDERS_SCAN_RESULT)
+
+        body = self._ask(headers, "what's the trust score for orders?")
+        self.assertIn("trust score", body["answer"])
+        self.assertIn("orders", body["answer"])
+
+    def test_trust_intent_org_wide_summary_when_no_dataset_named(self):
+        headers = self._register_and_login(f"at2{self._n}@a.com", f"Assistant Org T2 {self._n}")
+        source_id = self._create_source(headers, f"ST2{self._n}")
+        self._scan(headers, source_id, ORDERS_SCAN_RESULT)
+
+        body = self._ask(headers, "which datasets are the least trusted?")
+        self.assertIn("Average trust score", body["answer"])
+        self.assertIn("Lowest-trust", body["answer"])
+
+    def test_system_role_intent_reports_tag_for_named_dataset(self):
+        headers = self._register_and_login(f"asr1{self._n}@a.com", f"Assistant Org SR1 {self._n}")
+        source_id = self._create_source(headers, f"SSR1{self._n}")
+        self._scan(headers, source_id, ORDERS_SCAN_RESULT)
+
+        dataset_id = self.client.get("/api/datasets", headers=headers).json()[0]["id"]
+        self.client.patch(f"/api/governance/datasets/{dataset_id}", headers=headers, json={
+            "system_role": "SYSTEM_OF_RECORD",
+        })
+
+        body = self._ask(headers, "is orders a system of record?")
+        self.assertIn("System of Record", body["answer"])
+        self.assertIn("orders", body["answer"])
+
+    def test_system_role_intent_bulk_list_filters_by_requested_role(self):
+        # Regression-style test for the "each functionality that is
+        # assigned should be searchable" ask - a bulk "which datasets
+        # are systems of record" question should list only the
+        # SYSTEM_OF_RECORD datasets, not also dump every System of
+        # Reference dataset into the same answer.
+        headers = self._register_and_login(f"asr2{self._n}@a.com", f"Assistant Org SR2 {self._n}")
+        source_id = self._create_source(headers, f"SSR2{self._n}")
+        self._scan(headers, source_id, SCAN_RESULT)
+        self._scan(headers, source_id, ORDERS_SCAN_RESULT)
+
+        datasets = self.client.get("/api/datasets", headers=headers).json()
+        customers_id = next(d["id"] for d in datasets if d["name"] == "customers")
+        orders_id = next(d["id"] for d in datasets if d["name"] == "orders")
+
+        self.client.patch(f"/api/governance/datasets/{customers_id}", headers=headers, json={
+            "system_role": "SYSTEM_OF_RECORD",
+        })
+        self.client.patch(f"/api/governance/datasets/{orders_id}", headers=headers, json={
+            "system_role": "SYSTEM_OF_REFERENCE",
+        })
+
+        body = self._ask(headers, "which datasets are systems of record?")
+        self.assertIn("customers", body["answer"])
+        self.assertNotIn("orders", body["answer"])
+        self.assertNotIn("System of Reference", body["answer"])
+
     def test_fallback_semantic_search_matches_glossary_term(self):
         headers = self._register_and_login(f"a10{self._n}@a.com", f"Assistant Org 10 {self._n}")
         source_id = self._create_source(headers, f"S10{self._n}")

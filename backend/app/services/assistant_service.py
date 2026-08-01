@@ -104,6 +104,31 @@ QUALITY_KEYWORDS = (
 
 CONTRACT_KEYWORDS = ("contract", "breach", "breached")
 
+# Dataset.trust_score (see _answer_trust_question below) is a distinct
+# computed field from the profiled DataQuality dimensions QUALITY_KEYWORDS
+# answers - it factors in governance status, sensitivity, and freshness
+# together as one "can I rely on this" number, not just completeness/
+# uniqueness/etc. Previously there was no keyword or handler for this at
+# all, so "what's the trust score for X" fell through to the generic
+# semantic-search fallback, which can't find it either since trust_score
+# wasn't indexed as searchable text (see catalog_search_service.py's
+# _dataset_document).
+TRUST_KEYWORDS = (
+    "trust score", "trust scores", "how trustworthy", "how much can we trust",
+    "how reliable is", "most trusted", "least trusted"
+)
+
+# Dataset.system_role (SYSTEM_OF_RECORD / SYSTEM_OF_REFERENCE - see
+# _answer_system_role_question below) was previously shown on the
+# dataset detail page but had no Ask'Fe' handler and wasn't indexed as
+# searchable text either, so neither the entity search nor the assistant
+# could answer "which datasets are systems of record" or "is X a system
+# of reference".
+SYSTEM_ROLE_KEYWORDS = (
+    "system of record", "system of reference", "systems of record",
+    "systems of reference", "system role"
+)
+
 # "which sources/systems have PII" is asking for a system-level rollup
 # (see the source-scope branch in _answer_pii_question below), not the
 # usual per-dataset list - another reported bug where that phrasing
@@ -1093,6 +1118,132 @@ def _answer_contract_question(datasets: list[Dataset], normalized_query: str) ->
     }
 
 
+def _answer_trust_question(
+    datasets: list[Dataset],
+    normalized_query: str,
+    history: list[dict] | None = None,
+) -> dict | None:
+    """
+    Answers "what's the trust score for X" / "which datasets are most/
+    least trusted" from Dataset.trust_score - a computed rollup of
+    governance status, sensitivity, and freshness together (see
+    app/models/dataset.py), distinct from the profiled quality
+    dimensions QUALITY_KEYWORDS/_answer_quality_question answers.
+    """
+
+    if not any(keyword in normalized_query for keyword in TRUST_KEYWORDS):
+        return None
+
+    dataset = _find_mentioned_dataset(datasets, normalized_query)
+    if dataset is None and _has_referential_pronoun(normalized_query):
+        dataset = _find_mentioned_dataset_with_history(datasets, normalized_query, history)
+
+    if dataset is not None:
+        label = f"{dataset.schema_name}.{dataset.name}"
+        answer = f"{label}: trust score = {dataset.trust_score}/100."
+        return {
+            "answer": answer,
+            "sources": [{"type": "dataset", "id": dataset.id, "label": label}],
+        }
+
+    scored = sorted(datasets, key=lambda d: d.trust_score)
+    if not scored:
+        return {"answer": "No datasets in the catalog yet to score.", "sources": []}
+
+    avg_score = round(sum(d.trust_score for d in scored) / len(scored), 1)
+    worst = scored[:5]
+    best = list(reversed(scored[-5:]))
+
+    if "least trusted" in normalized_query:
+        highlighted, direction = worst, "Lowest-trust"
+    elif "most trusted" in normalized_query:
+        highlighted, direction = best, "Highest-trust"
+    else:
+        highlighted, direction = worst, "Lowest-trust"
+
+    answer = (
+        f"Average trust score across {len(scored)} dataset(s): {avg_score}/100.\n"
+        f"{direction}: "
+        + ", ".join(f"{d.schema_name}.{d.name} ({d.trust_score}/100)" for d in highlighted)
+    )
+
+    return {
+        "answer": answer,
+        "sources": [
+            {"type": "dataset", "id": d.id, "label": f"{d.schema_name}.{d.name}"}
+            for d in highlighted
+        ],
+    }
+
+
+def _answer_system_role_question(
+    datasets: list[Dataset],
+    normalized_query: str,
+    history: list[dict] | None = None,
+) -> dict | None:
+    """
+    Answers "is X a system of record/reference" and "which datasets are
+    systems of record/reference" from Dataset.system_role - a steward-
+    set tag (never inferred, see app/models/dataset.py), never
+    previously exposed to Ask'Fe' or the plain entity search.
+    """
+
+    if not any(keyword in normalized_query for keyword in SYSTEM_ROLE_KEYWORDS):
+        return None
+
+    dataset = _find_mentioned_dataset(datasets, normalized_query)
+    if dataset is None and _has_referential_pronoun(normalized_query):
+        dataset = _find_mentioned_dataset_with_history(datasets, normalized_query, history)
+
+    if dataset is not None:
+        label = f"{dataset.schema_name}.{dataset.name}"
+        if dataset.system_role == "SYSTEM_OF_RECORD":
+            answer = (
+                f"{label} is tagged System of Record - this is the authoritative "
+                "place this data is created or corrected."
+            )
+        elif dataset.system_role == "SYSTEM_OF_REFERENCE":
+            answer = (
+                f"{label} is tagged System of Reference - a derived copy for "
+                "reporting/lookup, not the place to correct the data."
+            )
+        else:
+            answer = f"{label} isn't tagged as either System of Record or System of Reference yet."
+
+        return {
+            "answer": answer,
+            "sources": [{"type": "dataset", "id": dataset.id, "label": label}],
+        }
+
+    # No specific dataset named - list whichever role was actually
+    # asked about (both, if the phrasing didn't distinguish, e.g. bare
+    # "system role").
+    wants_reference = "reference" in normalized_query
+    wants_record = "record" in normalized_query
+
+    records = [d for d in datasets if d.system_role == "SYSTEM_OF_RECORD"]
+    references = [d for d in datasets if d.system_role == "SYSTEM_OF_REFERENCE"]
+
+    lines = []
+    sources = []
+
+    if wants_record or not wants_reference:
+        lines.append(
+            f"System of Record ({len(records)}): "
+            + (", ".join(f"{d.schema_name}.{d.name}" for d in records) if records else "none tagged yet")
+        )
+        sources += [{"type": "dataset", "id": d.id, "label": f"{d.schema_name}.{d.name}"} for d in records]
+
+    if wants_reference or not wants_record:
+        lines.append(
+            f"System of Reference ({len(references)}): "
+            + (", ".join(f"{d.schema_name}.{d.name}" for d in references) if references else "none tagged yet")
+        )
+        sources += [{"type": "dataset", "id": d.id, "label": f"{d.schema_name}.{d.name}"} for d in references]
+
+    return {"answer": "\n".join(lines), "sources": sources}
+
+
 def _answer_via_semantic_search(db: Session, organization_id: str, query: str) -> dict:
     """
     The last-resort fallback: nothing above matched a known intent, so
@@ -1228,6 +1379,20 @@ def _answer_question_core(
     if result is not None:
         return result
 
+    # Checked before the semantic-search fallback, same reasoning as
+    # glossary/process above: previously neither trust score nor
+    # system role had a dedicated handler, so these fell through to
+    # the unscoped semantic search, which can't find them anyway since
+    # they weren't indexed as searchable text either (see
+    # catalog_search_service.py's _dataset_document).
+    result = _answer_trust_question(datasets, normalized_query, history=history)
+    if result is not None:
+        return result
+
+    result = _answer_system_role_question(datasets, normalized_query, history=history)
+    if result is not None:
+        return result
+
     return _answer_via_semantic_search(db, organization_id, query)
 
 
@@ -1241,7 +1406,8 @@ def _answer_question_core(
 # which is what caused quality questions to be answered as governance
 # maturity in the first place - see _answer_quality_question above).
 # "glossary"/"process" are new alongside _answer_glossary_question/
-# _answer_process_question above.
+# _answer_process_question above. "trust"/"system_role" are new
+# alongside _answer_trust_question/_answer_system_role_question above.
 _CATEGORY_KEYWORDS: tuple[tuple[str, tuple[str, ...]], ...] = (
     ("pii", PII_KEYWORDS),
     ("lineage", LINEAGE_KEYWORDS),
@@ -1251,6 +1417,8 @@ _CATEGORY_KEYWORDS: tuple[tuple[str, tuple[str, ...]], ...] = (
     ("ownership", OWNERSHIP_KEYWORDS),
     ("glossary", GLOSSARY_KEYWORDS),
     ("process", PROCESS_KEYWORDS),
+    ("trust", TRUST_KEYWORDS),
+    ("system_role", SYSTEM_ROLE_KEYWORDS),
 )
 
 
@@ -1339,6 +1507,14 @@ def _build_follow_up_suggestions(
     candidates.append((
         "quality",
         {"label": "Data quality", "query": f"What's the data quality score for {label}?"},
+    ))
+    # The docstring above has always listed "trust" as one of the
+    # angles this rotates through, but there was no actual candidate
+    # for it until _answer_trust_question existed to answer it -
+    # added now alongside that handler.
+    candidates.append((
+        "trust",
+        {"label": "Trust score", "query": f"What's the trust score for {label}?"},
     ))
     candidates.append((
         "systems",

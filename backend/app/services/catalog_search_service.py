@@ -110,9 +110,90 @@ def _source_document(source: DataSource, source_datasets: list[Dataset]) -> Corp
     )
 
 
+# Human-readable labels for every steward-assigned or computed
+# classification a dataset can carry. None of these raw enum values
+# (SYSTEM_OF_RECORD, BREACHED, CRITICAL, ...) were previously part of
+# _dataset_document()'s indexed text, so a plain keyword search for
+# "system of record", "breached contract", "high trust", etc. came back
+# empty even though the dataset genuinely has that attribute assigned -
+# it only worked if you phrased it as a full question Ask'Fe' had a
+# dedicated handler for (see QUALITY_KEYWORDS/_answer_quality_question
+# in assistant_service.py). This maps every such field to plain-English
+# words so the plain entity-search half of Global Search can surface
+# the dataset directly.
+_SYSTEM_ROLE_LABELS = {
+    "SYSTEM_OF_RECORD": "System of Record, the authoritative source",
+    "SYSTEM_OF_REFERENCE": "System of Reference, a derived downstream copy",
+}
+
+_CERTIFICATION_LABELS = {
+    "DRAFT": "draft, not yet certified",
+    "VERIFIED": "verified, certified",
+}
+
+_CONTRACT_STATUS_LABELS = {
+    "BREACHED": "breached contract",
+    "COMPLIANT": "compliant contract",
+    "PENDING_EVALUATION": "contract pending evaluation",
+    "NO_CONTRACT": "no data contract",
+}
+
+_GOVERNANCE_STATUS_LABELS = {
+    "CRITICAL": "critical governance status",
+    "REVIEW_REQUIRED": "governance review required",
+    "HEALTHY": "healthy governance status",
+}
+
+_DATA_CATEGORY_LABELS = {
+    "MASTER": "master data",
+    "REFERENCE": "reference data",
+    "TRANSACTIONAL": "transactional data",
+    "ANALYTICAL": "analytical data",
+}
+
+_FRESHNESS_LABELS = {
+    "STALE": "stale, outdated freshness",
+    "AGING": "aging freshness",
+    "FRESH": "fresh, up to date",
+}
+
+_OPERATIONAL_STATUS_LABELS = {
+    "UNSTABLE": "unstable operational status",
+    "AT_RISK": "at risk operational status",
+    "DEGRADED": "degraded operational status",
+    "HEALTHY": "healthy operational status",
+}
+
+_SENSITIVITY_LABELS = {
+    "LOW": "low sensitivity",
+    "MEDIUM": "medium sensitivity",
+    "HIGH": "high sensitivity",
+}
+
+
+def _trust_score_label(score: int) -> str:
+    if score >= 80:
+        return "high trust score, trustworthy"
+    if score >= 50:
+        return "medium trust score"
+    return "low trust score"
+
+
 def _dataset_document(dataset: Dataset) -> CorpusDocument:
 
     column_names = " ".join(column.name or "" for column in dataset.columns)
+
+    attribute_labels = " ".join(part for part in [
+        _SYSTEM_ROLE_LABELS.get(dataset.system_role, ""),
+        _CERTIFICATION_LABELS.get(dataset.certification, ""),
+        _CONTRACT_STATUS_LABELS.get(dataset.contract_status, ""),
+        _GOVERNANCE_STATUS_LABELS.get(dataset.governance_status, ""),
+        _DATA_CATEGORY_LABELS.get(dataset.data_category, ""),
+        _FRESHNESS_LABELS.get(dataset.freshness_status, ""),
+        _OPERATIONAL_STATUS_LABELS.get(dataset.operational_status, ""),
+        _SENSITIVITY_LABELS.get(dataset.sensitivity_score, ""),
+        _trust_score_label(dataset.trust_score),
+    ] if part)
 
     text_parts = [
         dataset.name,
@@ -124,6 +205,7 @@ def _dataset_document(dataset: Dataset) -> CorpusDocument:
         dataset.owner,
         dataset.steward,
         column_names,
+        attribute_labels,
     ]
 
     return CorpusDocument(
