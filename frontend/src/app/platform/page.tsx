@@ -12,6 +12,7 @@ import type {
   OrganizationSummary,
   PlanName,
   PlanStatus,
+  UserLoginSummary,
 } from "../../types/metadata";
 
 const PLAN_OPTIONS: PlanName[] = ["starter", "team", "business", "enterprise"];
@@ -33,6 +34,9 @@ export default function PlatformAdminPage() {
   const [loading, setLoading] = useState(true);
   const [forbidden, setForbidden] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+
+  const [logins, setLogins] = useState<UserLoginSummary[]>([]);
+  const [loginsLoading, setLoginsLoading] = useState(true);
 
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [detail, setDetail] = useState<OrganizationDetail | null>(null);
@@ -71,6 +75,24 @@ export default function PlatformAdminPage() {
     }
 
     fetchOrgs();
+  }, [user]);
+
+  useEffect(() => {
+    if (!user) return;
+
+    async function fetchLogins() {
+      try {
+        setLoginsLoading(true);
+        const response = await api.get<UserLoginSummary[]>("/api/platform/logins");
+        setLogins(response.data);
+      } catch (error) {
+        console.error(error);
+      } finally {
+        setLoginsLoading(false);
+      }
+    }
+
+    fetchLogins();
   }, [user]);
 
   useEffect(() => {
@@ -265,6 +287,56 @@ export default function PlatformAdminPage() {
                 {source.utm_source}: {source.count}
               </span>
             ))}
+          </div>
+        )}
+      </section>
+
+      <section className="mb-8 rounded-xl bg-white p-6 shadow">
+        <h2 className="mb-1 text-lg font-semibold">Logins ({logins.length})</h2>
+        <p className="mb-4 text-sm text-gray-500">
+          Everyone who has ever signed in, across every organization - password, magic
+          link, or GitHub.
+        </p>
+
+        {loginsLoading ? (
+          <div className="py-8 text-gray-500">Loading logins...</div>
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="border-b text-left text-gray-500">
+                  <th className="py-3">User</th>
+                  <th className="py-3">Organization</th>
+                  <th className="py-3">Role</th>
+                  <th className="py-3">Logins</th>
+                  <th className="py-3">Last Method</th>
+                  <th className="py-3">First Seen</th>
+                  <th className="py-3">Last Seen</th>
+                </tr>
+              </thead>
+              <tbody>
+                {logins.map((entry) => (
+                  <tr key={entry.user_id} className="border-b last:border-0 hover:bg-gray-50">
+                    <td className="py-3 font-medium">
+                      {entry.email}
+                      {entry.is_seed_data && (
+                        <span className="ml-1 text-xs text-gray-400">(demo)</span>
+                      )}
+                    </td>
+                    <td className="py-3 text-gray-600">{entry.organization_name}</td>
+                    <td className="py-3 text-gray-600">{entry.role}</td>
+                    <td className="py-3 text-gray-600">{entry.login_count}</td>
+                    <td className="py-3 text-gray-600">{entry.last_login_method}</td>
+                    <td className="py-3 text-gray-500">{formatDate(entry.first_login_at)}</td>
+                    <td className="py-3 text-gray-500">{formatDate(entry.last_login_at)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+
+            {logins.length === 0 && (
+              <div className="py-8 text-gray-500">No logins recorded yet.</div>
+            )}
           </div>
         )}
       </section>

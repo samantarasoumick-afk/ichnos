@@ -161,6 +161,22 @@ def update_organization_plan(
     }
 
 
+@router.get("/logins")
+def list_logins(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_platform_admin)
+):
+    """
+    "Who logged in" across every organization on this instance - one
+    row per user with a login count, first/last seen, and their most
+    recent login method. Phase 1 of the superadmin monitoring view;
+    failed-login attempts, support issues, and billing compliance are
+    tracked separately and planned for a later phase.
+    """
+
+    return platform_service.list_user_logins(db)
+
+
 @router.get("/marketing/funnel")
 def marketing_funnel(
     days: int = 30,

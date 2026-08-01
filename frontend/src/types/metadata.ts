@@ -815,6 +815,19 @@ export type MarketingFunnel = {
   signups_by_source: MarketingFunnelSource[];
 };
 
+export type UserLoginSummary = {
+  user_id: string;
+  email: string;
+  role: string;
+  is_seed_data: boolean;
+  organization_id: string;
+  organization_name: string;
+  login_count: number;
+  first_login_at: string;
+  last_login_at: string;
+  last_login_method: string;
+};
+
 export type BillingEntitlementsSummary = {
   max_sources: number | null;
   max_editor_seats: number | null;

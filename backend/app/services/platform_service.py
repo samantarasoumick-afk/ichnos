@@ -26,6 +26,24 @@ from app.models.user import User
 from app.services.entitlements import effective_entitlements
 
 
+# Every successful sign-in, regardless of method, writes one of these
+# to audit_logs (see app/api/auth.py) - this module just rolls them up
+# across every tenant rather than adding any new tracking.
+LOGIN_ACTIONS = [
+    "user.login",
+    "user.magic_link_login",
+    "user.github_login",
+    "user.github_register",
+]
+
+LOGIN_METHOD_LABELS = {
+    "user.login": "Password",
+    "user.magic_link_login": "Magic link",
+    "user.github_login": "GitHub",
+    "user.github_register": "GitHub (signup)",
+}
+
+
 def _last_activity_by_org(db: Session) -> dict:
     rows = (
         db.query(AuditLog.organization_id, func.max(AuditLog.created_at))
@@ -97,6 +115,61 @@ def list_organizations(db: Session) -> list[dict]:
         })
 
     return results
+
+
+def list_user_logins(db: Session) -> list[dict]:
+    """
+    "Who logged in" - one row per user who has ever authenticated,
+    across every organization, with a running login count, first/last
+    seen, and the method of their most recent login. Phase 1 of the
+    superadmin monitoring view; failed-login/lockout activity, support
+    issues, and billing compliance are separate, later phases (billing
+    compliance is already partially visible today via each
+    organization's plan_status in list_organizations - "past_due"
+    orgs stand out there).
+
+    Built entirely from existing audit_logs rows rather than a new
+    table - the same rows _last_activity_by_org above already reads,
+    just grouped by user instead of by org.
+    """
+
+    events = (
+        db.query(AuditLog, User, Organization)
+        .join(User, User.id == AuditLog.actor_user_id)
+        .join(Organization, Organization.id == User.organization_id)
+        .filter(AuditLog.action.in_(LOGIN_ACTIONS))
+        .order_by(AuditLog.created_at.desc())
+        .all()
+    )
+
+    # Walking newest -> oldest per the query's ORDER BY: the first row
+    # seen for a given user is necessarily their most recent login, and
+    # whatever row is seen last for them (the oldest) ends up as
+    # first_login_at once the loop finishes.
+    by_user: dict = {}
+
+    for log, user, org in events:
+        entry = by_user.get(user.id)
+
+        if entry is None:
+            entry = {
+                "user_id": user.id,
+                "email": user.email,
+                "role": user.role,
+                "is_seed_data": user.is_seed_data,
+                "organization_id": org.id,
+                "organization_name": org.name,
+                "login_count": 0,
+                "first_login_at": log.created_at,
+                "last_login_at": log.created_at,
+                "last_login_method": LOGIN_METHOD_LABELS.get(log.action, log.action),
+            }
+            by_user[user.id] = entry
+
+        entry["login_count"] += 1
+        entry["first_login_at"] = log.created_at
+
+    return sorted(by_user.values(), key=lambda entry: entry["last_login_at"], reverse=True)
 
 
 def get_organization_detail(db: Session, organization_id: str) -> Optional[dict]:
