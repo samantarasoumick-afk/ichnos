@@ -141,6 +141,16 @@ export default function GlobalSearch() {
     }, DEBOUNCE_MS);
   }
 
+  // Clicking a "Keep going" suggestion on the inline answer card - runs
+  // the exact same flow as if the suggestion's text had been typed
+  // into the box, since the suggestion is itself the next question,
+  // not a navigation target.
+  function selectFollowUp(nextQuery: string) {
+    setQuery(nextQuery);
+    setOpen(true);
+    scheduleSearch(nextQuery);
+  }
+
   function selectResult(result: SearchResultItem) {
     setOpen(false);
     setQuery("");
@@ -250,6 +260,7 @@ export default function GlobalSearch() {
             answer={answer}
             asking={asking}
             onNavigate={closeDropdown}
+            onSelectFollowUp={selectFollowUp}
           />
 
           {loading && results.length === 0 && (

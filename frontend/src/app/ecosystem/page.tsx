@@ -282,8 +282,13 @@ export default function EcosystemPage() {
     setStatFilter((prev) => (prev === kind ? null : kind));
   }
 
-  async function runSemanticSearch() {
-    const trimmed = searchQuery.trim();
+  // Accepts an optional override so a "Keep going" follow-up chip can
+  // re-run the search immediately with its own query text, without
+  // waiting on a setSearchQuery() re-render first (state updates
+  // aren't synchronous, so reading searchQuery right after setting it
+  // would still see the old value).
+  async function runSemanticSearch(overrideQuery?: string) {
+    const trimmed = (overrideQuery ?? searchQuery).trim();
     if (!trimmed) {
       setSearchResults([]);
       setAnswer(null);
@@ -314,6 +319,15 @@ export default function EcosystemPage() {
       setAnswer(result);
       setAsking(false);
     }
+  }
+
+  // Clicking a "Keep going" suggestion on the inline answer card - same
+  // idea as GlobalSearch's own selectFollowUp: run the suggestion as
+  // the next question, updating the visible input to match so it
+  // doesn't look like input and results have gone out of sync.
+  function selectFollowUp(nextQuery: string) {
+    setSearchQuery(nextQuery);
+    runSemanticSearch(nextQuery);
   }
 
   function openSearchResult(result: SearchResultItem) {
@@ -478,7 +492,7 @@ export default function EcosystemPage() {
               />
               <button
                 type="button"
-                onClick={runSemanticSearch}
+                onClick={() => runSemanticSearch()}
                 disabled={searching}
                 className="shrink-0 rounded-lg border px-4 py-2 text-sm hover:bg-gray-50 disabled:opacity-50"
               >
@@ -488,7 +502,12 @@ export default function EcosystemPage() {
 
             {(asking || answer) && (
               <div className="mt-3 overflow-hidden rounded-lg border">
-                <SearchAnswerCard query={searchQuery.trim()} answer={answer} asking={asking} />
+                <SearchAnswerCard
+                  query={searchQuery.trim()}
+                  answer={answer}
+                  asking={asking}
+                  onSelectFollowUp={selectFollowUp}
+                />
               </div>
             )}
 

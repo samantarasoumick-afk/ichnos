@@ -289,6 +289,47 @@ describe("GlobalSearch", () => {
     expect(screen.queryByText("Answer")).not.toBeInTheDocument();
   });
 
+  it('re-runs the search in place when a "Keep going" follow-up chip is clicked', async () => {
+    mockedGet.mockResolvedValue({ data: { results: RESULTS } });
+    mockedPost
+      .mockResolvedValueOnce({
+        data: {
+          answer: "public.customers is owned by Growth Team.",
+          sources: [],
+          follow_up_suggestions: [
+            { label: "PII", query: "Does public.customers contain PII?" },
+          ],
+        },
+      })
+      .mockResolvedValueOnce({
+        data: {
+          answer: "public.customers has 2 PII columns.",
+          sources: [],
+          follow_up_suggestions: [],
+        },
+      });
+
+    render(<GlobalSearch />);
+    const input = getSearchInput() as HTMLInputElement;
+    fireEvent.change(input, { target: { value: "who owns customers?" } });
+
+    await screen.findByText("public.customers is owned by Growth Team.");
+
+    fireEvent.click(screen.getByText("PII"));
+
+    await waitFor(() =>
+      expect(mockedPost).toHaveBeenNthCalledWith(2, "/api/assistant/ask", {
+        query: "Does public.customers contain PII?",
+        history: [],
+      })
+    );
+
+    expect(await screen.findByText("public.customers has 2 PII columns.")).toBeInTheDocument();
+    // The visible input is kept in sync with the question that's now
+    // actually being answered, rather than still showing the old text.
+    expect(input.value).toBe("Does public.customers contain PII?");
+  });
+
   it('navigates to the deep-linked Ask\'Fe\' page on "Continue in Ask\'Fe\'"', async () => {
     mockedGet.mockResolvedValue({ data: { results: [] } });
     mockedPost.mockResolvedValue({

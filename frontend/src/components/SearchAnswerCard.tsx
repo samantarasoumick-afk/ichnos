@@ -13,6 +13,18 @@ type Props = {
   answer: AskResponse | null;
   asking: boolean;
   onNavigate?: () => void;
+  // When provided, renders answer.follow_up_suggestions as clickable
+  // "Keep going" chips - clicking one re-runs the *same* inline
+  // search/answer flow with the suggestion's query text, rather than
+  // navigating anywhere. This mirrors the Ask'Fe' page's own "Keep
+  // going" chips, and is safe to do inline (no conversation history
+  // needed) because every suggestion assistant_service.py generates
+  // names its dataset explicitly (e.g. "What's downstream of
+  // public.customers?") rather than relying on a pronoun referring
+  // back to prior turns. Omitted entirely (no chips shown) for
+  // callers that don't have a sensible re-run hook to offer, such as
+  // if this card is ever reused somewhere fully static.
+  onSelectFollowUp?: (query: string) => void;
 };
 
 /**
@@ -30,7 +42,7 @@ type Props = {
  * chips, download) for anyone who wants to keep going past a single
  * answer.
  */
-export default function SearchAnswerCard({ query, answer, asking, onNavigate }: Props) {
+export default function SearchAnswerCard({ query, answer, asking, onNavigate, onSelectFollowUp }: Props) {
   const router = useRouter();
 
   if (!asking && !answer) return null;
@@ -78,6 +90,26 @@ export default function SearchAnswerCard({ query, answer, asking, onNavigate }: 
                   {source.label}
                 </button>
               ))}
+            </div>
+          )}
+
+          {onSelectFollowUp && answer.follow_up_suggestions.length > 0 && (
+            <div className="mt-2 border-t border-gray-200 pt-2">
+              <div className="mb-1 text-[10px] font-semibold uppercase tracking-wide text-gray-400">
+                Keep going
+              </div>
+              <div className="flex flex-wrap gap-1.5">
+                {answer.follow_up_suggestions.map((suggestion, index) => (
+                  <button
+                    key={`${suggestion.label}-${index}`}
+                    type="button"
+                    onClick={() => onSelectFollowUp(suggestion.query)}
+                    className="rounded-full border border-gray-300 bg-white px-2.5 py-1 text-[11px] text-gray-700 hover:bg-gray-100"
+                  >
+                    {suggestion.label}
+                  </button>
+                ))}
+              </div>
             </div>
           )}
         </>
